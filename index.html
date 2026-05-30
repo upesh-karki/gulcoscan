@@ -408,7 +408,7 @@
      HOME SCREEN
 ════════════════════════════════════════════ -->
 <div id="homeScreen" class="screen active">
-  <div class="app-header">
+  <div class="app-header greeting">
     <h1>GlucoScan</h1>
     <p>Track glucose in seconds</p>
   </div>
@@ -430,9 +430,9 @@
     <div class="card">
       <div class="card-label">Trend</div>
       <div class="chart-toggles">
-        <button class="toggle-btn active" data-days="10" onclick="setChartDays(10)">10D</button>
-        <button class="toggle-btn" data-days="30" onclick="setChartDays(30)">30D</button>
-        <button class="toggle-btn" data-days="365" onclick="setChartDays(365)">1Y</button>
+        <button class="toggle-btn active" data-days="10">10D</button>
+        <button class="toggle-btn" data-days="30">30D</button>
+        <button class="toggle-btn" data-days="365">1Y</button>
       </div>
       <canvas id="trendCanvas" height="160"></canvas>
     </div>
@@ -445,7 +445,7 @@
 <div id="historyScreen" class="screen">
   <div class="history-header">
     <h2>History</h2>
-    <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="export-btn" id="exportBtn">⬇ Export CSV</button>
   </div>
   <div class="scroll-area" id="historyList"></div>
 </div>
@@ -455,7 +455,7 @@
 ════════════════════════════════════════════ -->
 <div id="cameraScreen" class="screen">
   <div class="cam-header">
-    <button class="back-btn" onclick="closeCamera()">✕</button>
+    <button class="back-btn" id="closeCameraBtn">✕</button>
     <span class="cam-title">Scan Glucose Meter</span>
   </div>
   <video id="videoEl" autoplay playsinline muted></video>
@@ -464,8 +464,8 @@
   </div>
   <div class="cam-bottom">
     <div class="cam-hint">Point camera at meter display</div>
-    <button id="captureBtn" onclick="captureAndOCR()"></button>
-    <button class="manual-fallback" onclick="openManualEntry()">Enter manually instead</button>
+    <button id="captureBtn"></button>
+    <button class="manual-fallback" id="manualFallbackBtn">Enter manually instead</button>
   </div>
   <div id="processingOverlay">
     <div class="spinner"></div>
@@ -478,7 +478,7 @@
 ════════════════════════════════════════════ -->
 <div id="confirmScreen" class="screen">
   <div class="confirm-header">
-    <button class="back-btn" onclick="closeConfirm()">✕</button>
+    <button class="back-btn" id="closeConfirmBtn">✕</button>
     <span class="cam-title" id="confirmTitle">Confirm Reading</span>
   </div>
   <div class="confirm-body">
@@ -488,8 +488,8 @@
     </div>
     <div class="confirm-label">Select tag (optional)</div>
     <div class="tags-grid" id="confirmTags"></div>
-    <button class="save-btn" onclick="saveConfirmed()">Save Reading</button>
-    <button class="rescan-btn" onclick="closeConfirm()">Discard</button>
+    <button class="save-btn" id="saveConfirmedBtn">Save Reading</button>
+    <button class="rescan-btn" id="discardConfirmBtn">Discard</button>
   </div>
 </div>
 
@@ -498,14 +498,14 @@
 ════════════════════════════════════════════ -->
 <div class="modal-overlay" id="manualModal">
   <div class="modal-sheet">
-    <div class="modal-title">Manual Entry <button class="modal-close" onclick="closeManualEntry()">✕</button></div>
+    <div class="modal-title">Manual Entry <button class="modal-close" id="closeManualBtn">✕</button></div>
     <div class="manual-input-wrap">
       <input type="number" class="manual-input" id="manualInput" placeholder="0" min="20" max="600" inputmode="numeric">
       <span class="manual-unit">mg/dL</span>
     </div>
     <div class="confirm-label">Tag (optional)</div>
     <div class="tags-grid" id="manualTags"></div>
-    <button class="save-btn" onclick="saveManual()">Save Reading</button>
+    <button class="save-btn" id="manualSaveBtn">Save Reading</button>
   </div>
 </div>
 
@@ -517,8 +517,8 @@
     <div class="modal-title">Delete Reading?</div>
     <div style="color:var(--text-muted);font-size:14px;" id="deleteDesc"></div>
     <div class="delete-actions">
-      <button class="del-cancel" onclick="closeDeleteModal()">Cancel</button>
-      <button class="del-confirm" onclick="confirmDelete()">Delete</button>
+      <button class="del-cancel" id="cancelDeleteBtn">Cancel</button>
+      <button class="del-confirm" id="confirmDeleteBtn">Delete</button>
     </div>
   </div>
 </div>
@@ -527,14 +527,14 @@
      TAB BAR + FAB
 ════════════════════════════════════════════ -->
 <div class="tab-bar">
-  <button class="tab-btn active" id="tabHome" onclick="switchTab('home')">
+  <button class="tab-btn active" id="tabHome" data-tab="home">
     <span class="tab-icon">🏠</span>Home
   </button>
-  <button class="tab-btn" id="tabHistory" onclick="switchTab('history')">
+  <button class="tab-btn" id="tabHistory" data-tab="history">
     <span class="tab-icon">📋</span>History
   </button>
 </div>
-<button id="fabScan" onclick="openCamera()">📷</button>
+<button id="fabScan">📷</button>
 
 <div id="toast"></div>
 
@@ -543,471 +543,615 @@
 
 <script>
 'use strict';
+document.addEventListener('DOMContentLoaded', () => {
+  const STORAGE_KEY = 'glucoscan_readings';
+  const TAGS = ['Before meal', 'After meal', 'Fasting', 'Bedtime', 'Random'];
+  let readings = [];
+  let videoStream = null;
+  let currentTag = '';
+  let pendingValue = null;
+  let pendingSource = 'manual';
+  let pendingDeleteId = null;
+  let currentRange = 10;
+  let toastTimer = null;
 
-// ─── CONSTANTS ────────────────────────────────────────────────
-const STORAGE_KEY = 'glucoscan_v1';
-const TAGS = ['Before meal', 'After meal', 'Fasting', 'Bedtime', 'Random'];
+  // ── INIT ──────────────────────────────────────────────────────
+  loadReadings();
+  updateGreeting();
+  setupNav();
+  setupChart();
+  setupScan();
+  setupManual();
+  setupHistory();
+  setupDelete();
+  renderAll();
 
-// Color helpers
-function getColor(v) {
-  if (v < 70) return '#ef4444';
-  if (v <= 140) return '#22c55e';
-  if (v <= 180) return '#f59e0b';
-  return '#ef4444';
-}
-function getStatus(v) {
-  if (v < 70) return { label: 'Low', cls: 'badge-low' };
-  if (v <= 140) return { label: 'Normal', cls: 'badge-normal' };
-  if (v <= 180) return { label: 'High', cls: 'badge-high' };
-  return { label: 'Very High', cls: 'badge-veryhigh' };
-}
-
-// ─── DATA ─────────────────────────────────────────────────────
-function loadData() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-  catch { return []; }
-}
-function saveData(arr) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-}
-function addReading(value, tag, source = 'manual') {
-  const arr = loadData();
-  arr.unshift({ id: crypto.randomUUID(), value, tag, timestamp: Date.now(), source });
-  saveData(arr);
-}
-function deleteReading(id) {
-  saveData(loadData().filter(r => r.id !== id));
-}
-
-// ─── SAMPLE DATA SEED ─────────────────────────────────────────
-(function seedSampleData() {
-  if (loadData().length > 0) return;
-  const now = Date.now();
-  const DAY = 86400000;
-  const tags = TAGS;
-  const readings = [];
-  for (let d = 21; d >= 0; d--) {
-    // 2–4 readings per day
-    const count = 2 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < count; i++) {
-      const t = now - d * DAY + (6 + i * 5 + Math.random() * 3) * 3600000;
-      // Realistic: fasting ~95-110, post-meal ~120-165, random ~90-145
-      const base = [95, 125, 155, 105, 135][i % 5];
-      const val = Math.round(base + (Math.random() - 0.5) * 30);
-      readings.push({
-        id: crypto.randomUUID(),
-        value: Math.max(72, Math.min(175, val)),
-        tag: tags[i % tags.length],
-        timestamp: Math.round(t),
-        source: 'sample'
-      });
-    }
-  }
-  readings.sort((a, b) => b.timestamp - a.timestamp);
-  saveData(readings);
-})();
-
-// ─── STATS ────────────────────────────────────────────────────
-function avg(arr) { return arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : null; }
-function calcStats() {
-  const data = loadData();
-  const now = Date.now();
-  const d7 = data.filter(r => now - r.timestamp <= 7*86400000).map(r=>r.value);
-  const d30 = data.filter(r => now - r.timestamp <= 30*86400000).map(r=>r.value);
-  const inRange = d30.filter(v=>v>=70&&v<=180).length;
-  const pct = d30.length ? Math.round(inRange/d30.length*100) : null;
-  return { avg7: avg(d7), avg30: avg(d30), pct };
-}
-
-// ─── HOME RENDER ──────────────────────────────────────────────
-function renderHome() {
-  const data = loadData();
-  // Latest
-  const el = document.getElementById('latestDisplay');
-  if (data.length) {
-    const r = data[0];
-    const s = getStatus(r.value);
-    el.innerHTML = `<span class="latest-value" style="color:${getColor(r.value)}">${r.value}</span><span class="latest-unit">mg/dL</span><br><span class="status-badge ${s.cls}">${s.label}</span>`;
-  } else {
-    el.innerHTML = '<div class="no-data-hint">No readings yet — tap 📷 to scan</div>';
-  }
-  // Stats
-  const s = calcStats();
-  document.getElementById('avg7').textContent = s.avg7 !== null ? s.avg7 : '—';
-  document.getElementById('avg30').textContent = s.avg30 !== null ? s.avg30 : '—';
-  document.getElementById('inRange').textContent = s.pct !== null ? s.pct + '%' : '—';
-  // Chart
-  renderChart(currentChartDays);
-}
-
-// ─── CHART ────────────────────────────────────────────────────
-let currentChartDays = 10;
-function setChartDays(d) {
-  currentChartDays = d;
-  document.querySelectorAll('.toggle-btn').forEach(b => {
-    b.classList.toggle('active', parseInt(b.dataset.days) === d);
-  });
-  renderChart(d);
-}
-
-function renderChart(days) {
-  const canvas = document.getElementById('trendCanvas');
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.parentElement.clientWidth - 0; // card padding accounted by CSS
-  const H = 160;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
-  const now = Date.now();
-  const data = loadData().filter(r => now - r.timestamp <= days * 86400000)
-    .sort((a,b) => a.timestamp - b.timestamp);
-
-  if (data.length < 2) {
-    ctx.fillStyle = '#555';
-    ctx.font = '13px -apple-system, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Not enough data', W/2, H/2);
-    return;
-  }
-
-  const pad = { top: 14, bottom: 24, left: 36, right: 12 };
-  const cW = W - pad.left - pad.right;
-  const cH = H - pad.top - pad.bottom;
-
-  const vals = data.map(r=>r.value);
-  const minV = Math.min(...vals, 60);
-  const maxV = Math.max(...vals, 200);
-  const range = maxV - minV || 1;
-
-  function toX(i) { return pad.left + (i / (data.length-1)) * cW; }
-  function toY(v) { return pad.top + cH - ((v - minV) / range * cH); }
-
-  // Reference bands
-  function drawBand(lo, hi, color) {
-    const y1 = toY(Math.min(hi, maxV));
-    const y2 = toY(Math.max(lo, minV));
-    if (y2 <= y1) return;
-    ctx.fillStyle = color;
-    ctx.fillRect(pad.left, y1, cW, y2 - y1);
-  }
-  drawBand(70, 140, 'rgba(34,197,94,0.06)');
-
-  // Y axis labels
-  ctx.fillStyle = '#555';
-  ctx.font = '10px -apple-system, system-ui, sans-serif';
-  ctx.textAlign = 'right';
-  const steps = [minV, Math.round((minV+maxV)/2), maxV];
-  steps.forEach(v => {
-    const y = toY(v);
-    ctx.fillText(v, pad.left - 4, y + 4);
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 1;
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(pad.left + cW, y);
-    ctx.stroke();
-  });
-
-  // Line
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(59,130,246,0.6)';
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  data.forEach((r, i) => {
-    i === 0 ? ctx.moveTo(toX(i), toY(r.value)) : ctx.lineTo(toX(i), toY(r.value));
-  });
-  ctx.stroke();
-
-  // Dots
-  data.forEach((r, i) => {
-    ctx.beginPath();
-    ctx.arc(toX(i), toY(r.value), 4, 0, Math.PI*2);
-    ctx.fillStyle = getColor(r.value);
-    ctx.fill();
-    ctx.strokeStyle = '#0a0a0a';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  });
-}
-
-// ─── HISTORY RENDER ───────────────────────────────────────────
-function renderHistory() {
-  const data = loadData();
-  const el = document.getElementById('historyList');
-  if (!data.length) {
-    el.innerHTML = '<div class="empty-history">No readings yet.<br>Tap 📷 to scan your first glucose reading.</div>';
-    return;
-  }
-
-  // Group by day
-  const groups = {};
-  const today = new Date(); today.setHours(0,0,0,0);
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-
-  data.forEach(r => {
-    const d = new Date(r.timestamp); d.setHours(0,0,0,0);
-    let label;
-    if (d.getTime() === today.getTime()) label = 'Today';
-    else if (d.getTime() === yesterday.getTime()) label = 'Yesterday';
-    else label = d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
-    if (!groups[label]) groups[label] = [];
-    groups[label].push(r);
-  });
-
-  let html = '';
-  Object.entries(groups).forEach(([day, rows]) => {
-    html += `<div class="day-group"><div class="day-label">${day}</div>`;
-    rows.forEach(r => {
-      const t = new Date(r.timestamp).toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
-      html += `<div class="reading-row" onclick="promptDelete('${r.id}')">
-        <div class="color-dot" style="background:${getColor(r.value)}"></div>
-        <div class="row-value" style="color:${getColor(r.value)}">${r.value}</div>
-        <div class="row-tag">${r.tag || '—'}</div>
-        <div class="row-time">${t}</div>
-      </div>`;
-    });
-    html += '</div>';
-  });
-  el.innerHTML = html;
-}
-
-// ─── TABS ─────────────────────────────────────────────────────
-function switchTab(tab) {
-  document.getElementById('homeScreen').classList.toggle('active', tab === 'home');
-  document.getElementById('historyScreen').classList.toggle('active', tab === 'history');
-  document.getElementById('tabHome').classList.toggle('active', tab === 'home');
-  document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
-  if (tab === 'home') renderHome();
-  if (tab === 'history') renderHistory();
-}
-
-// ─── CAMERA ───────────────────────────────────────────────────
-let videoStream = null;
-async function openCamera() {
-  const screen = document.getElementById('cameraScreen');
-  screen.classList.add('active');
-  try {
-    videoStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-    const v = document.getElementById('videoEl');
-    v.srcObject = videoStream;
-    await v.play();
-  } catch (err) {
-    closeCamera();
-    if (err.name === 'NotAllowedError') showToast('Camera permission denied');
-    else if (err.name === 'NotFoundError') { showToast('No camera found'); openManualEntry(); }
-    else { showToast('Camera unavailable — enter manually'); openManualEntry(); }
-  }
-}
-function closeCamera() {
-  stopStream();
-  document.getElementById('cameraScreen').classList.remove('active');
-  document.getElementById('processingOverlay').classList.remove('show');
-}
-function stopStream() {
-  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
-}
-
-// ─── CAPTURE + OCR ────────────────────────────────────────────
-async function captureAndOCR() {
-  const video = document.getElementById('videoEl');
-  const canvas = document.getElementById('captureCanvas');
-  const proc = document.getElementById('processingOverlay');
-  const procText = document.getElementById('procText');
-  proc.classList.add('show');
-  procText.textContent = 'Capturing...';
-
-  // Draw video frame to canvas (crop center guide region ~75% width, 30% height)
-  const vw = video.videoWidth || video.clientWidth;
-  const vh = video.videoHeight || video.clientHeight;
-  const cropW = vw * 0.75;
-  const cropH = cropW / 2.5;
-  const cropX = (vw - cropW) / 2;
-  const cropY = (vh - cropH) / 2;
-
-  canvas.width = cropW;
-  canvas.height = cropH;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-  // Upscale for better OCR
-  const scale = 3;
-  const ocCanvas = document.createElement('canvas');
-  ocCanvas.width = cropW * scale;
-  ocCanvas.height = cropH * scale;
-  const oc = ocCanvas.getContext('2d');
-  oc.imageSmoothingEnabled = false;
-  oc.drawImage(canvas, 0, 0, ocCanvas.width, ocCanvas.height);
-
-  // Pre-process: contrast boost
-  const id = oc.getImageData(0, 0, ocCanvas.width, ocCanvas.height);
-  for (let i = 0; i < id.data.length; i += 4) {
-    const gray = 0.299*id.data[i] + 0.587*id.data[i+1] + 0.114*id.data[i+2];
-    const c = gray > 128 ? 255 : 0;
-    id.data[i] = id.data[i+1] = id.data[i+2] = c;
-  }
-  oc.putImageData(id, 0, 0);
-
-  procText.textContent = 'Loading OCR engine...';
-
-  try {
-    // Lazy-load Tesseract
-    if (!window.Tesseract) {
-      await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-    }
-    procText.textContent = 'Reading display...';
-    const result = await Tesseract.recognize(ocCanvas, 'eng', {
-      tessedit_char_whitelist: '0123456789.',
-      tessedit_pageseg_mode: '7',
-    });
-    const text = result.data.text.replace(/\s/g, '');
-    const num = parseOCRResult(text);
-    proc.classList.remove('show');
-    if (num !== null) {
-      stopStream();
-      document.getElementById('cameraScreen').classList.remove('active');
-      openConfirm(num, 'scan');
+  // ── DATA ──────────────────────────────────────────────────────
+  function loadReadings() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      readings = JSON.parse(raw);
     } else {
-      showToast('Could not read a number — try again or enter manually');
-      proc.classList.remove('show');
+      readings = generateSamples();
+      saveReadings();
     }
-  } catch (err) {
-    proc.classList.remove('show');
-    showToast('OCR failed — please enter manually');
-    console.error('OCR error:', err);
+    readings.sort((a, b) => b.timestamp - a.timestamp);
   }
-}
 
-function parseOCRResult(text) {
-  // Find all number-like sequences between 20 and 600
-  const matches = text.match(/\d+(?:\.\d+)?/g) || [];
-  for (const m of matches) {
-    const v = parseFloat(m);
-    if (v >= 20 && v <= 600) return Math.round(v);
+  function saveReadings() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
   }
-  return null;
-}
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
+  function addReading(value, tag, source) {
+    readings.unshift({
+      id: Math.random().toString(36).slice(2) + Date.now(),
+      value,
+      tag: tag || '',
+      timestamp: Date.now(),
+      source: source || 'manual'
+    });
+    saveReadings();
+  }
 
-// ─── CONFIRM SCREEN ───────────────────────────────────────────
-let pendingValue = null;
-let pendingSource = 'manual';
-let selectedTag = '';
+  function deleteReadingById(id) {
+    readings = readings.filter(r => r.id !== id);
+    saveReadings();
+  }
 
-function openConfirm(value, source) {
-  pendingValue = value;
-  pendingSource = source;
-  selectedTag = '';
-  document.getElementById('confirmNum').textContent = value;
-  document.getElementById('confirmNum').style.color = getColor(value);
-  document.getElementById('confirmTitle').textContent = source === 'scan' ? `Found: ${value} mg/dL — confirm?` : 'Confirm Reading';
-  renderTagGrid('confirmTags', () => {});
-  document.getElementById('confirmScreen').classList.add('active');
-}
-function closeConfirm() {
-  document.getElementById('confirmScreen').classList.remove('active');
-  pendingValue = null;
-}
-function saveConfirmed() {
-  if (pendingValue === null) return;
-  addReading(pendingValue, selectedTag, pendingSource);
-  closeConfirm();
-  renderHome();
-  showToast('Reading saved ✓');
-}
+  function generateSamples() {
+    const now = Date.now();
+    const DAY = 86400000;
+    const tagList = TAGS;
+    const result = [];
+    for (let d = 21; d >= 0; d--) {
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        const t = now - d * DAY + (6 + i * 4.5 + Math.random() * 2) * 3600000;
+        const bases = [95, 130, 155, 100, 140];
+        const base = bases[i % bases.length];
+        const val = Math.round(base + (Math.random() - 0.5) * 28);
+        result.push({
+          id: Math.random().toString(36).slice(2) + Math.round(t),
+          value: Math.max(72, Math.min(175, val)),
+          tag: tagList[i % tagList.length],
+          timestamp: Math.round(t),
+          source: 'sample'
+        });
+      }
+    }
+    result.sort((a, b) => b.timestamp - a.timestamp);
+    return result;
+  }
 
-// ─── MANUAL ENTRY ─────────────────────────────────────────────
-function openManualEntry() {
-  closeCamera();
-  document.getElementById('manualInput').value = '';
-  selectedTag = '';
-  renderTagGrid('manualTags', () => {});
-  document.getElementById('manualModal').classList.add('open');
-  setTimeout(() => document.getElementById('manualInput').focus(), 300);
-}
-function closeManualEntry() {
-  document.getElementById('manualModal').classList.remove('open');
-}
-function saveManual() {
-  const v = parseInt(document.getElementById('manualInput').value);
-  if (!v || v < 20 || v > 600) { showToast('Enter a value between 20 and 600'); return; }
-  addReading(v, selectedTag, 'manual');
-  closeManualEntry();
-  renderHome();
-  showToast('Reading saved ✓');
-}
+  // ── CLASSIFY ──────────────────────────────────────────────────
+  function classify(v) {
+    if (v < 70)   return { label: 'Low',       cls: 'badge-low',     color: '#ef4444' };
+    if (v <= 140) return { label: 'Normal',    cls: 'badge-normal',  color: '#22c55e' };
+    if (v <= 180) return { label: 'High',      cls: 'badge-high',    color: '#f59e0b' };
+    return           { label: 'Very High', cls: 'badge-veryhigh', color: '#ef4444' };
+  }
 
-// ─── TAG GRID ─────────────────────────────────────────────────
-function renderTagGrid(containerId) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = TAGS.map(t => `<button class="tag-pill${selectedTag===t?' selected':''}" onclick="selectTag('${t}','${containerId}')">${t}</button>`).join('');
-}
-function selectTag(tag, containerId) {
-  selectedTag = selectedTag === tag ? '' : tag;
-  renderTagGrid(containerId);
-}
+  // ── GREETING ──────────────────────────────────────────────────
+  function updateGreeting() {
+    const h = new Date().getHours();
+    const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    const el = document.querySelector('.greeting h1');
+    if (el) el.textContent = g;
+  }
 
-// ─── DELETE ───────────────────────────────────────────────────
-let pendingDeleteId = null;
-function promptDelete(id) {
-  const r = loadData().find(x=>x.id===id);
-  if (!r) return;
-  pendingDeleteId = id;
-  document.getElementById('deleteDesc').textContent =
-    `${r.value} mg/dL — ${r.tag || '—'} — ${new Date(r.timestamp).toLocaleString()}`;
-  document.getElementById('deleteModal').classList.add('open');
-}
-function closeDeleteModal() { document.getElementById('deleteModal').classList.remove('open'); pendingDeleteId = null; }
-function confirmDelete() {
-  if (pendingDeleteId) { deleteReading(pendingDeleteId); closeDeleteModal(); renderHistory(); renderHome(); showToast('Reading deleted'); }
-}
+  // ── NAV ───────────────────────────────────────────────────────
+  function setupNav() {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+    document.getElementById('fabScan').addEventListener('click', openCamera);
+  }
 
-// ─── EXPORT CSV ───────────────────────────────────────────────
-function exportCSV() {
-  const data = loadData();
-  if (!data.length) { showToast('No data to export'); return; }
-  const rows = ['ID,Value (mg/dL),Tag,Timestamp,Source'];
-  data.forEach(r => rows.push(`${r.id},${r.value},"${r.tag||''}",${new Date(r.timestamp).toISOString()},${r.source}`));
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `glucoscan_${new Date().toISOString().slice(0,10)}.csv`;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-}
+  function switchTab(tab) {
+    ['home', 'history'].forEach(name => {
+      const screen = document.getElementById(name + 'Screen');
+      const btn = document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1));
+      screen.classList.toggle('active', name === tab);
+      if (btn) btn.classList.toggle('active', name === tab);
+    });
+    if (tab === 'home') renderHome();
+    if (tab === 'history') renderHistory();
+  }
 
-// ─── TOAST ────────────────────────────────────────────────────
-let toastTimer = null;
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
-}
+  // ── RENDER ALL ────────────────────────────────────────────────
+  function renderAll() {
+    renderHome();
+    renderHistory();
+  }
 
-// ─── CLOSE MODALS ON OVERLAY CLICK ────────────────────────────
-document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) { o.classList.remove('open'); } });
-});
+  // ── HOME ──────────────────────────────────────────────────────
+  function renderHome() {
+    const el = document.getElementById('latestDisplay');
+    if (readings.length) {
+      const r = readings[0];
+      const s = classify(r.value);
+      const time = new Date(r.timestamp).toLocaleString(undefined, {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      el.innerHTML = `
+        <span class="latest-value" style="color:${s.color}">${r.value}</span><span class="latest-unit">mg/dL</span><br>
+        <span class="status-badge ${s.cls}">${s.label}</span>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${time}${r.tag ? ' · ' + r.tag : ''}</div>
+      `;
+    } else {
+      el.innerHTML = '<div class="no-data-hint">No readings yet — tap 📷 to scan</div>';
+    }
 
-// ─── RESIZE / INIT ────────────────────────────────────────────
-window.addEventListener('resize', () => { if (currentChartDays) renderChart(currentChartDays); });
+    // Stats
+    const now = Date.now();
+    const d7  = readings.filter(r => now - r.timestamp <= 7  * 86400000).map(r => r.value);
+    const d30 = readings.filter(r => now - r.timestamp <= 30 * 86400000).map(r => r.value);
+    const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+    const inRng = d30.filter(v => v >= 70 && v <= 180).length;
+    const pct = d30.length ? Math.round(inRng / d30.length * 100) : null;
 
-renderHome();
+    document.getElementById('avg7').textContent   = avg(d7)  !== null ? avg(d7)  : '—';
+    document.getElementById('avg30').textContent  = avg(d30) !== null ? avg(d30) : '—';
+    document.getElementById('inRange').textContent = pct !== null ? pct + '%' : '—';
+
+    renderChart(currentRange);
+  }
+
+  // ── CHART ─────────────────────────────────────────────────────
+  function setupChart() {
+    document.querySelectorAll('.toggle-btn[data-days]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentRange = parseInt(btn.dataset.days);
+        document.querySelectorAll('.toggle-btn[data-days]').forEach(b =>
+          b.classList.toggle('active', parseInt(b.dataset.days) === currentRange)
+        );
+        renderChart(currentRange);
+      });
+    });
+    window.addEventListener('resize', () => renderChart(currentRange));
+  }
+
+  function renderChart(days) {
+    const canvas = document.getElementById('trendCanvas');
+    const dpr = window.devicePixelRatio || 1;
+    const parent = canvas.parentElement;
+    const W = parent.clientWidth - 36; // card has 18px padding each side
+    const H = 160;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const now = Date.now();
+    const data = readings
+      .filter(r => now - r.timestamp <= days * 86400000)
+      .slice()
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (data.length < 2) {
+      ctx.fillStyle = '#555';
+      ctx.font = '13px -apple-system, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(data.length === 0 ? 'No data for this range' : 'Need more data', W / 2, H / 2);
+      return;
+    }
+
+    const pad = { top: 14, bottom: 28, left: 38, right: 12 };
+    const cW = W - pad.left - pad.right;
+    const cH = H - pad.top - pad.bottom;
+
+    const vals = data.map(r => r.value);
+    const minV = Math.max(0,  Math.min(...vals) - 20);
+    const maxV = Math.max(...vals) + 20;
+    const range = maxV - minV || 1;
+
+    const toX = i => pad.left + (i / (data.length - 1)) * cW;
+    const toY = v => pad.top + cH - ((v - minV) / range * cH);
+
+    // In-range band
+    const bandY1 = toY(Math.min(180, maxV));
+    const bandY2 = toY(Math.max(70,  minV));
+    ctx.fillStyle = 'rgba(34,197,94,0.06)';
+    ctx.fillRect(pad.left, bandY1, cW, Math.max(0, bandY2 - bandY1));
+
+    // Reference lines at 70 and 180
+    [70, 180].forEach(ref => {
+      if (ref < minV || ref > maxV) return;
+      const y = toY(ref);
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = ref === 70 ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(pad.left + cW, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = ref === 70 ? 'rgba(239,68,68,0.55)' : 'rgba(245,158,11,0.55)';
+      ctx.font = '9px -apple-system, system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(ref, pad.left - 3, y + 3);
+    });
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '9px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    [minV, Math.round((minV + maxV) / 2), maxV].forEach(v => {
+      const y = toY(v);
+      ctx.fillText(Math.round(v), pad.left - 3, y + 3);
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(pad.left + cW, y);
+      ctx.stroke();
+    });
+
+    // X-axis date labels (3 evenly spaced)
+    ctx.fillStyle = '#555';
+    ctx.font = '9px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const labelIdxs = [0, Math.floor((data.length - 1) / 2), data.length - 1];
+    labelIdxs.forEach(i => {
+      const d = new Date(data[i].timestamp);
+      const lbl = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      ctx.fillText(lbl, toX(i), H - 6);
+    });
+
+    // Line gradient fill
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
+    grad.addColorStop(0, 'rgba(59,130,246,0.18)');
+    grad.addColorStop(1, 'rgba(59,130,246,0)');
+    ctx.beginPath();
+    data.forEach((r, i) => {
+      i === 0 ? ctx.moveTo(toX(i), toY(r.value)) : ctx.lineTo(toX(i), toY(r.value));
+    });
+    ctx.lineTo(toX(data.length - 1), pad.top + cH);
+    ctx.lineTo(toX(0), pad.top + cH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(59,130,246,0.75)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    data.forEach((r, i) => {
+      i === 0 ? ctx.moveTo(toX(i), toY(r.value)) : ctx.lineTo(toX(i), toY(r.value));
+    });
+    ctx.stroke();
+
+    // Dots
+    data.forEach((r, i) => {
+      const x = toX(i), y = toY(r.value);
+      const c = classify(r.value);
+      ctx.beginPath();
+      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = c.color;
+      ctx.fill();
+      ctx.strokeStyle = '#0a0a0a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  }
+
+  // ── HISTORY ───────────────────────────────────────────────────
+  function setupHistory() {
+    document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  }
+
+  function renderHistory() {
+    const el = document.getElementById('historyList');
+    if (!readings.length) {
+      el.innerHTML = '<div class="empty-history">No readings yet.<br>Tap 📷 to scan your first glucose reading.</div>';
+      return;
+    }
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+
+    const groups = {};
+    const order = [];
+    readings.forEach(r => {
+      const d = new Date(r.timestamp); d.setHours(0, 0, 0, 0);
+      let label;
+      if (d.getTime() === today.getTime()) label = 'Today';
+      else if (d.getTime() === yesterday.getTime()) label = 'Yesterday';
+      else label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      if (!groups[label]) { groups[label] = []; order.push(label); }
+      groups[label].push(r);
+    });
+
+    let html = '';
+    order.forEach(day => {
+      html += `<div class="day-group"><div class="day-label">${day}</div>`;
+      groups[day].forEach(r => {
+        const t = new Date(r.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        const s = classify(r.value);
+        html += `<div class="reading-row" data-id="${r.id}">
+          <div class="color-dot" style="background:${s.color}"></div>
+          <div class="row-value" style="color:${s.color}">${r.value}</div>
+          <div class="row-tag">${r.tag || '—'}</div>
+          <div class="row-time">${t}</div>
+        </div>`;
+      });
+      html += '</div>';
+    });
+    el.innerHTML = html;
+
+    el.querySelectorAll('.reading-row[data-id]').forEach(row => {
+      row.addEventListener('click', () => promptDelete(row.dataset.id));
+    });
+  }
+
+  // ── DELETE ────────────────────────────────────────────────────
+  function setupDelete() {
+    document.getElementById('cancelDeleteBtn').addEventListener('click', closeDeleteModal);
+    document.getElementById('confirmDeleteBtn').addEventListener('click', doDelete);
+    document.getElementById('deleteModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('deleteModal')) closeDeleteModal();
+    });
+  }
+
+  function promptDelete(id) {
+    const r = readings.find(x => x.id === id);
+    if (!r) return;
+    pendingDeleteId = id;
+    document.getElementById('deleteDesc').textContent =
+      `${r.value} mg/dL — ${r.tag || '—'} — ${new Date(r.timestamp).toLocaleString()}`;
+    document.getElementById('deleteModal').classList.add('open');
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('open');
+    pendingDeleteId = null;
+  }
+
+  function doDelete() {
+    if (!pendingDeleteId) return;
+    deleteReadingById(pendingDeleteId);
+    closeDeleteModal();
+    renderHistory();
+    renderHome();
+    showToast('Reading deleted');
+  }
+
+  // ── CAMERA ────────────────────────────────────────────────────
+  function setupScan() {
+    document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
+    document.getElementById('captureBtn').addEventListener('click', captureAndOCR);
+    document.getElementById('manualFallbackBtn').addEventListener('click', () => {
+      closeCamera();
+      openManualEntry();
+    });
+  }
+
+  async function openCamera() {
+    document.getElementById('cameraScreen').classList.add('active');
+    document.getElementById('processingOverlay').classList.remove('show');
+    try {
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      const v = document.getElementById('videoEl');
+      v.srcObject = videoStream;
+      await v.play();
+    } catch (err) {
+      closeCamera();
+      if (err.name === 'NotAllowedError') {
+        showToast('Camera permission denied — enter manually');
+        openManualEntry();
+      } else if (err.name === 'NotFoundError') {
+        showToast('No camera found — enter manually');
+        openManualEntry();
+      } else {
+        showToast('Camera unavailable — enter manually');
+        openManualEntry();
+      }
+    }
+  }
+
+  function closeCamera() {
+    stopVideoStream();
+    document.getElementById('cameraScreen').classList.remove('active');
+    document.getElementById('processingOverlay').classList.remove('show');
+  }
+
+  function stopVideoStream() {
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+  }
+
+  async function captureAndOCR() {
+    const video   = document.getElementById('videoEl');
+    const canvas  = document.getElementById('captureCanvas');
+    const proc    = document.getElementById('processingOverlay');
+    const procTxt = document.getElementById('procText');
+    proc.classList.add('show');
+    procTxt.textContent = 'Capturing frame…';
+
+    // Crop guide-box region (~75% width, 30% height from center)
+    const vw = video.videoWidth  || video.clientWidth;
+    const vh = video.videoHeight || video.clientHeight;
+    const cropW = vw * 0.75;
+    const cropH = cropW / 2.5;
+    const cropX = (vw - cropW) / 2;
+    const cropY = (vh - cropH) / 2;
+
+    canvas.width  = cropW;
+    canvas.height = cropH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    // Upscale & binarize for better OCR accuracy
+    const scale = 3;
+    const oc = document.createElement('canvas');
+    oc.width  = cropW * scale;
+    oc.height = cropH * scale;
+    const octx = oc.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(canvas, 0, 0, oc.width, oc.height);
+    const id = octx.getImageData(0, 0, oc.width, oc.height);
+    for (let i = 0; i < id.data.length; i += 4) {
+      const g = 0.299 * id.data[i] + 0.587 * id.data[i + 1] + 0.114 * id.data[i + 2];
+      const c = g > 128 ? 255 : 0;
+      id.data[i] = id.data[i + 1] = id.data[i + 2] = c;
+    }
+    octx.putImageData(id, 0, 0);
+
+    procTxt.textContent = 'Reading display…';
+    try {
+      const Tess = window.Tesseract;
+      if (!Tess) throw new Error('Tesseract not loaded');
+      const result = await Tess.recognize(oc, 'eng', {
+        tessedit_char_whitelist: '0123456789.',
+        tessedit_pageseg_mode: '7'
+      });
+      const text = result.data.text.replace(/\s+/g, '');
+      const num  = parseOCRText(text);
+      proc.classList.remove('show');
+      if (num !== null) {
+        stopVideoStream();
+        document.getElementById('cameraScreen').classList.remove('active');
+        openConfirmScreen(num, 'scan');
+      } else {
+        showToast('Could not read a number — try again or enter manually');
+      }
+    } catch (err) {
+      proc.classList.remove('show');
+      showToast('OCR failed — please enter manually');
+      console.error('OCR:', err);
+    }
+  }
+
+  function parseOCRText(text) {
+    const matches = text.match(/\d+(?:\.\d+)?/g) || [];
+    for (const m of matches) {
+      const v = parseFloat(m);
+      if (v >= 20 && v <= 600) return Math.round(v);
+    }
+    return null;
+  }
+
+  // ── CONFIRM SCREEN ────────────────────────────────────────────
+  function setupConfirm() {
+    document.getElementById('closeConfirmBtn').addEventListener('click',  closeConfirmScreen);
+    document.getElementById('discardConfirmBtn').addEventListener('click', closeConfirmScreen);
+    document.getElementById('saveConfirmedBtn').addEventListener('click',  saveConfirmed);
+  }
+  // Call setupConfirm eagerly (elements are in DOM)
+  setupConfirm();
+
+  function openConfirmScreen(value, source) {
+    pendingValue  = value;
+    pendingSource = source;
+    currentTag    = '';
+    const s = classify(value);
+    document.getElementById('confirmNum').textContent  = value;
+    document.getElementById('confirmNum').style.color  = s.color;
+    document.getElementById('confirmTitle').textContent =
+      source === 'scan' ? `Found: ${value} mg/dL — confirm?` : 'Confirm Reading';
+    renderTagGrid('confirmTags');
+    document.getElementById('confirmScreen').classList.add('active');
+  }
+
+  function closeConfirmScreen() {
+    document.getElementById('confirmScreen').classList.remove('active');
+    pendingValue = null;
+  }
+
+  function saveConfirmed() {
+    if (pendingValue === null) return;
+    addReading(pendingValue, currentTag, pendingSource);
+    closeConfirmScreen();
+    renderAll();
+    showToast('Reading saved ✓');
+  }
+
+  // ── MANUAL ENTRY ──────────────────────────────────────────────
+  function setupManual() {
+    document.getElementById('closeManualBtn').addEventListener('click', closeManualEntry);
+    document.getElementById('manualSaveBtn').addEventListener('click',  saveManual);
+    document.getElementById('manualModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('manualModal')) closeManualEntry();
+    });
+  }
+
+  function openManualEntry() {
+    currentTag = '';
+    document.getElementById('manualInput').value = '';
+    renderTagGrid('manualTags');
+    document.getElementById('manualModal').classList.add('open');
+    setTimeout(() => document.getElementById('manualInput').focus(), 320);
+  }
+
+  function closeManualEntry() {
+    document.getElementById('manualModal').classList.remove('open');
+  }
+
+  function saveManual() {
+    const v = parseInt(document.getElementById('manualInput').value, 10);
+    if (!v || v < 20 || v > 600) {
+      showToast('Enter a value between 20 and 600');
+      return;
+    }
+    addReading(v, currentTag, 'manual');
+    closeManualEntry();
+    renderAll();
+    showToast('Reading saved ✓');
+  }
+
+  // ── TAG GRID ──────────────────────────────────────────────────
+  function renderTagGrid(containerId) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = TAGS.map(t =>
+      `<button class="tag-pill${currentTag === t ? ' selected' : ''}" data-tag="${t}">${t}</button>`
+    ).join('');
+    el.querySelectorAll('.tag-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentTag = currentTag === btn.dataset.tag ? '' : btn.dataset.tag;
+        renderTagGrid(containerId);
+      });
+    });
+  }
+
+  // ── EXPORT CSV ────────────────────────────────────────────────
+  function exportCSV() {
+    if (!readings.length) { showToast('No data to export'); return; }
+    const rows = ['ID,Value (mg/dL),Tag,Timestamp,Source'];
+    readings.forEach(r => {
+      rows.push(`${r.id},${r.value},"${(r.tag || '').replace(/"/g, '""')}",${new Date(r.timestamp).toISOString()},${r.source}`);
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `glucoscan_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── TOAST ─────────────────────────────────────────────────────
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+}); // end DOMContentLoaded
 </script>
 </body>
 </html>
