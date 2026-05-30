@@ -1155,3 +1155,278 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const STORAGE_KEY = 'glucoscan_readings';
+  let readings = [];
+  let stream = null;
+  let currentTag = '';
+  let chart = null;
+  let currentRange = 10;
+  let facing = 'environment';
+
+  if (window.ChartAnnotation) { try { Chart.register(window.ChartAnnotation); } catch(e){} }
+  loadReadings(); updateGreeting(); setupNav(); setupScan(); setupManual(); setupHistory(); renderAll();
+
+  function loadReadings(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ readings = JSON.parse(raw); }
+      else { readings = generateSamples(); saveReadings(); }
+    } catch(e){ readings = generateSamples(); }
+    readings.sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp));
+  }
+  function saveReadings(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(readings)); }
+
+  function generateSamples(){
+    const now = new Date();
+    const tags = ['Fasting','Before meal','After meal','Bedtime',''];
+    const base = [95,102,88,145,110,98,125,105,92,118,135,100,87,112,128,94,108,142,96,103];
+    return base.map((v,i)=>{
+      const d = new Date(now); d.setDate(now.getDate()-(base.length-i)*1.5); d.setHours(7+(i%4)*3);
+      return {id:Date.now()+i, value:v+Math.floor(Math.random()*10-5), timestamp:d.toISOString(), tag:tags[i%tags.length]};
+    });
+  }
+
+  function updateGreeting(){
+    const h = new Date().getHours();
+    const g = h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+    const el = document.querySelector('.greeting h1');
+    if(el) el.textContent = g;
+  }
+
+  function setupNav(){
+    document.querySelectorAll('.nav-item').forEach(btn=>{
+      btn.onclick = ()=> showTab(btn.dataset.tab);
+    });
+  }
+  window.showTab = function(tab){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('tab-'+tab).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.tab===tab));
+    if(tab==='home') renderHome();
+    if(tab==='history') renderHistory();
+    if(tab==='scan') showScanInitial();
+  };
+
+  function renderAll(){ renderHome(); renderHistory(); }
+
+  function renderHome(){
+    const has = readings.length>0;
+    document.getElementById('emptyHome').classList.toggle('hidden', has);
+    document.getElementById('homeContent').classList.toggle('hidden', !has);
+    if(!has) return;
+    const latest = readings[0];
+    document.getElementById('latestValue').textContent = latest.value;
+    document.getElementById('latestTime').textContent = new Date(latest.timestamp).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const badge = document.getElementById('latestBadge');
+    const isLow = latest.value<70, isHigh = latest.value>180;
+    badge.textContent = isLow?'Low':isHigh?'High':'In range';
+    badge.style.background = isLow?'#fee2e2':isHigh?'#ffedd5':'#ecfeff';
+    badge.style.color = isLow?'#b91c1c':isHigh?'#c2410c':'#0891b2';
+    document.getElementById('avg7').textContent = avgDays(7);
+    document.getElementById('avg30').textContent = avgDays(30);
+    setupChart(); updateInsight();
+  }
+
+  function avgDays(d){
+    const cutoff = Date.now()-d*86400000;
+    const vals = readings.filter(r=>new Date(r.timestamp)>cutoff).map(r=>r.value);
+    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : '--';
+  }
+
+  function setupChart(){
+    const ctx = document.getElementById('trendChart');
+    if(chart) chart.destroy();
+    const data = getChartData(currentRange);
+    chart = new Chart(ctx, {
+      type:'line',
+      data:{labels:data.labels, datasets:[{label:'Glucose',data:data.values,tension:.35,borderWidth:2.5,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.12)',fill:true,pointRadius:0,pointHoverRadius:5}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true}},y:{min:60,max:220,grid:{color:'#f1f5f9'}}}}
+    });
+    document.getElementById('rangeToggle').querySelectorAll('button').forEach(b=>{
+      b.onclick=()=>{document.querySelectorAll('#rangeToggle button').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentRange=parseInt(b.dataset.range);setupChart();};
+    });
+  }
+
+  function getChartData(range){
+    const now=new Date(); let labels=[], values=[];
+    if(range<=30){
+      for(let i=range-1;i>=0;i--){
+        const d=new Date(now); d.setDate(now.getDate()-i);
+        const dv=readings.filter(r=>new Date(r.timestamp).toDateString()===d.toDateString()).map(r=>r.value);
+        labels.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+        values.push(dv.length?Math.round(dv.reduce((a,b)=>a+b,0)/dv.length):null);
+      }
+    } else {
+      for(let i=51;i>=0;i--){
+        const d=new Date(now); d.setDate(now.getDate()-i*7);
+        const wv=readings.filter(r=>{const diff=(now-new Date(r.timestamp))/86400000;return diff>=i*7&&diff<(i+1)*7;}).map(r=>r.value);
+        labels.push(i%4===0?d.toLocaleDateString('en-US',{month:'short'}):'');
+        values.push(wv.length?Math.round(wv.reduce((a,b)=>a+b,0)/wv.length):null);
+      }
+    }
+    return {labels,values};
+  }
+
+  function updateInsight(){
+    const last10=readings.slice(0,10).map(r=>r.value).reverse();
+    if(last10.length<3) return;
+    const trend=last10[last10.length-1]-last10[0];
+    let msg='Your levels are stable. Keep it up!';
+    if(trend>15) msg='Trending up — consider checking after meals.';
+    if(trend<-15) msg='Trending down — great progress!';
+    document.getElementById('insightText').textContent=msg;
+  }
+
+  function setupScan(){
+    document.getElementById('startScanBtn').onclick=startCamera;
+    document.getElementById('cancelScan').onclick=stopCamera;
+    document.getElementById('captureBtn').onclick=capture;
+    document.getElementById('switchCam').onclick=switchCamera;
+    document.getElementById('retryBtn').onclick=()=>showCamera();
+    document.getElementById('confirmBtn').onclick=confirmReading;
+    document.querySelectorAll('#tagChips .tag').forEach(t=>{
+      t.onclick=()=>{document.querySelectorAll('#tagChips .tag').forEach(x=>x.classList.remove('active'));t.classList.add('active');currentTag=t.dataset.tag;};
+    });
+  }
+
+  function showScanInitial(){ hideAllScan(); document.getElementById('scanInitial').classList.remove('hidden'); stopCamera(); }
+  function hideAllScan(){ ['scanInitial','cameraView','processingView','resultView'].forEach(id=>document.getElementById(id).classList.add('hidden')); }
+  function showCamera(){ hideAllScan(); document.getElementById('cameraView').classList.remove('hidden'); }
+
+  async function startCamera(){
+    showCamera();
+    try {
+      if(stream) stream.getTracks().forEach(t=>t.stop());
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:1700}},audio:false});
+      document.getElementById('video').srcObject=stream;
+    } catch(e){ alert('Camera access needed. Please allow camera permission.'); showScanInitial(); }
+  }
+  function stopCamera(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} showScanInitial(); }
+  async function switchCamera(){ facing=facing==='environment'?'user':'environment'; await startCamera(); }
+
+  async function capture(){
+    const video=document.getElementById('video');
+    const canvas=document.getElementById('captureCanvas');
+    const w=video.videoWidth, h=video.videoHeight;
+    canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(video,0,0,w,h);
+    const cw=w*0.72, ch=h*0.28, cx=(w-cw)/2, cy=(h-ch)/2;
+    const crop=document.createElement('canvas'); crop.width=cw; crop.height=ch;
+    crop.getContext('2d').drawImage(canvas,cx,cy,cw,ch,0,0,cw,ch);
+    hideAllScan(); document.getElementById('processingView').classList.remove('hidden');
+    vibrate(20);
+    try {
+      const {data:{text}}=await Tesseract.recognize(crop,'eng',{
+        logger:m=>{if(m.status==='recognizing text') document.getElementById('ocrProgress').textContent=Math.round(m.progress*100)+'%';},
+        tessedit_char_whitelist:'0123456789'
+      });
+      showResult(extractGlucose(text));
+    } catch(e){ showResult(null); }
+    stopCamera();
+  }
+
+  function extractGlucose(text){
+    if(!text) return null;
+    const nums=(text.match(/\d{2,4}/g)||[]).map(n=>parseInt(n)).filter(n=>n>=20&&n<=600);
+    if(!nums.length) return null;
+    const ideal=nums.filter(n=>n>=50&&n<=400);
+    const pool=ideal.length?ideal:nums;
+    pool.sort((a,b)=>Math.abs(a-120)-Math.abs(b-120));
+    return pool[0];
+  }
+
+  function showResult(value){
+    hideAllScan(); document.getElementById('resultView').classList.remove('hidden');
+    document.getElementById('detectedValue').textContent=value||'--';
+    document.getElementById('manualAdjust').value=value||'';
+    document.getElementById('readingTime').value=new Date().toISOString().slice(0,16);
+    currentTag=''; document.querySelectorAll('#tagChips .tag').forEach(x=>x.classList.remove('active'));
+  }
+
+  function confirmReading(){
+    const v=parseInt(document.getElementById('manualAdjust').value);
+    if(!v||v<20||v>600){alert('Please enter a value between 20-600');return;}
+    const tsRaw=document.getElementById('readingTime').value;
+    const ts=tsRaw?new Date(tsRaw).toISOString():new Date().toISOString();
+    readings.unshift({id:Date.now(),value:v,timestamp:ts,tag:currentTag,source:'scan'});
+    saveReadings(); vibrate(30); showSuccess(v); showScanInitial(); showTab('home'); renderAll();
+  }
+
+  function showSuccess(v){
+    const overlay=document.getElementById('successOverlay');
+    document.getElementById('successText').textContent=v+' mg/dL logged';
+    overlay.classList.add('show');
+    setTimeout(()=>overlay.classList.remove('show'),1600);
+  }
+
+  function setupManual(){
+    document.getElementById('manualSave').onclick=()=>{
+      const v=parseInt(document.getElementById('manualValue').value);
+      if(!v||v<20||v>600){alert('Enter value 20-600');return;}
+      const tsRaw=document.getElementById('manualTime').value;
+      const ts=tsRaw?new Date(tsRaw).toISOString():new Date().toISOString();
+      const tag=document.querySelector('#manualTags .tag.active')?.dataset.tag||'';
+      readings.unshift({id:Date.now(),value:v,timestamp:ts,tag,source:'manual'});
+      saveReadings(); closeManual(); vibrate(20); showSuccess(v); renderAll(); showTab('home');
+    };
+    document.querySelectorAll('#manualTags .tag').forEach(t=>{
+      t.onclick=()=>{document.querySelectorAll('#manualTags .tag').forEach(x=>x.classList.remove('active'));t.classList.toggle('active');};
+    });
+  }
+  window.openManual=function(){
+    document.getElementById('manualModal').classList.add('active');
+    document.getElementById('manualTime').value=new Date().toISOString().slice(0,16);
+    document.getElementById('manualValue').value='';
+    setTimeout(()=>document.getElementById('manualValue').focus(),100);
+  };
+  window.closeManual=function(){ document.getElementById('manualModal').classList.remove('active'); };
+
+  function setupHistory(){ document.getElementById('exportBtn').onclick=exportCSV; }
+
+  function renderHistory(){
+    const list=document.getElementById('historyList');
+    if(!readings.length){list.innerHTML='<div class="empty-state"><p style="color:var(--text-2)">No readings yet</p></div>';return;}
+    const groups={};
+    readings.forEach(r=>{const k=new Date(r.timestamp).toDateString();(groups[k]=groups[k]||[]).push(r);});
+    let html='';
+    Object.keys(groups).forEach(k=>{
+      html+=`<div class="history-date">${formatDateGroup(new Date(k))}</div>`;
+      groups[k].forEach(r=>{
+        const cls=r.value<70?'low':r.value>180?'high':'in';
+        const time=new Date(r.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+        html+=`<div class="history-item" data-id="${r.id}"><div class="history-value ${cls}">${r.value}<span>mg/dL</span></div><div class="history-meta"><div class="history-time">${time}</div>${r.tag?`<div class="history-tag">${r.tag}</div>`:''}</div><button class="history-delete">×</button></div>`;
+      });
+    });
+    list.innerHTML=html;
+    list.querySelectorAll('.history-delete').forEach(btn=>{
+      btn.onclick=e=>{
+        const id=e.target.closest('.history-item').dataset.id;
+        if(confirm('Delete this reading?')){readings=readings.filter(r=>String(r.id)!==String(id));saveReadings();renderHistory();renderHome();vibrate(10);}
+      };
+    });
+  }
+
+  function formatDateGroup(d){
+    const now=new Date(), y=new Date(now); y.setDate(now.getDate()-1);
+    if(d.toDateString()===now.toDateString()) return 'Today';
+    if(d.toDateString()===y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  }
+
+  function exportCSV(){
+    const rows=[['Date','Time','Value_mg_dL','Tag','Source']];
+    readings.forEach(r=>{const d=new Date(r.timestamp);rows.push([d.toLocaleDateString(),d.toLocaleTimeString(),r.value,r.tag||'',r.source||'']);});
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`glucoscan-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); vibrate(10);
+  }
+
+  function vibrate(ms){ if(navigator.vibrate) try{navigator.vibrate(ms);}catch(e){} }
+});
+</script>
+</body>
+</html>
