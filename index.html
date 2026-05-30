@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Glucose Tracker</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --border: rgba(255,255,255,0.08);
+      --text: #f0f0f0;
+      --muted: #888;
+      --low: #ef4444;
+      --normal: #22c55e;
+      --high: #f59e0b;
+      --very-high: #ef4444;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 16px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-top: 8px;
+    }
+    .header h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-sub { font-size: 0.75rem; color: var(--muted); }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+
+    /* Latest reading */
+    .latest-value {
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .latest-unit { font-size: 0.9rem; color: var(--muted); }
+    .latest-status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .latest-time { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+
+    /* Status colors */
+    .status-low    { background: rgba(239,68,68,0.15);  color: #f87171; }
+    .status-normal { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    .status-high   { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .status-very-high { background: rgba(239,68,68,0.15); color: #f87171; }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+    .stat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .stat-value { font-size: 1.3rem; font-weight: 700; }
+
+    /* Log form */
+    .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    input, select {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+    select option { background: #1a1a1a; }
+
+    .btn-log {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-log:hover { background: #2563eb; }
+    .btn-log:active { transform: scale(0.98); }
+
+    /* Range indicator */
+    .range-bar {
+      height: 8px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      position: relative;
+      margin: 10px 0 6px;
+      overflow: hidden;
+    }
+    .range-fill {
+      position: absolute;
+      top: 0; left: 0;
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease, background 0.3s;
+    }
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    /* History list */
+    .history-list { display: flex; flex-direction: column; gap: 8px; }
+    .history-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      gap: 12px;
+    }
+    .history-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .history-value { font-size: 1.05rem; font-weight: 700; min-width: 50px; }
+    .history-info { flex: 1; }
+    .history-context { font-size: 0.82rem; color: var(--text); }
+    .history-time { font-size: 0.72rem; color: var(--muted); }
+    .history-delete {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .history-delete:hover { color: #f87171; background: rgba(239,68,68,0.1); }
+
+    /* Chart */
+    .chart-wrap { position: relative; height: 120px; margin-top: 8px; }
+    canvas { width: 100% !important; }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .empty-icon { font-size: 2rem; margin-bottom: 8px; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1e1e1e;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 20px;
+      font-size: 0.9rem;
+      transition: transform 0.3s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Target ranges info */
+    .ranges-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .range-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .range-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Tab filter */
+    .tab-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Export button */
+    .btn-export {
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--muted);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-export:hover { border-color: var(--accent); color: var(--accent); }
+
+    @media (max-width: 360px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>🩸 Glucose Tracker</h1>
+      <div class="header-sub">Data stored on this device</div>
+    </div>
+    <button class="btn-export" onclick="exportCSV()">⬇ Export</button>
+  </div>
+
+  <!-- Latest reading card -->
+  <div class="card" id="latestCard">
+    <div class="card-title">Latest Reading</div>
+    <div id="latestDisplay">
+      <div class="empty">
+        <div class="empty-icon">📊</div>
+        No readings yet. Log your first below.
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow" style="display:none">
+    <div class="stat-card">
+      <div class="stat-label">Average</div>
+      <div class="stat-value" id="statAvg">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Lowest</div>
+      <div class="stat-value" id="statLow">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Highest</div>
+      <div class="stat-value" id="statHigh">—</div>
+    </div>
+  </div>
+
+  <!-- Log form -->
+  <div class="card">
+    <div class="card-title">Log Reading</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1.2">
+        <label>Glucose (mg/dL)</label>
+        <input type="number" id="glucoseInput" placeholder="e.g. 95" min="20" max="600" inputmode="numeric"/>
+      </div>
+      <div class="form-group">
+        <label>When</label>
+        <select id="contextInput">
+          <option value="Fasting">Fasting</option>
+          <option value="Before meal">Before meal</option>
+          <option value="After meal">After meal</option>
+          <option value="Bedtime">Bedtime</option>
+          <option value="Random">Random</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="dateInput"/>
+      </div>
+      <div class="form-group">
+        <label>Time</label>
+        <input type="time" id="timeInput"/>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Note (optional)</label>
+      <input type="text" id="noteInput" placeholder="e.g. after exercise, sick day..."/>
+    </div>
+
+    <!-- Live range indicator -->
+    <div id="rangeIndicator" style="display:none">
+      <div class="range-bar">
+        <div class="range-fill" id="rangeFill"></div>
+      </div>
+      <div class="range-labels">
+        <span>Low &lt;70</span>
+        <span>Normal 70–140</span>
+        <span>High &gt;180</span>
+      </div>
+    </div>
+
+    <button class="btn-log" onclick="logReading()">+ Log Reading</button>
+  </div>
+
+  <!-- Chart -->
+  <div class="card" id="chartCard" style="display:none">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Trend (last 14 days)</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="glucoseChart"></canvas>
+    </div>
+    <div class="ranges-info">
+      <div class="range-item"><div class="range-dot" style="background:#ef4444"></div>Low &lt;70</div>
+      <div class="range-item"><div class="range-dot" style="background:#22c55e"></div>Normal 70–140</div>
+      <div class="range-item"><div class="range-dot" style="background:#f59e0b"></div>High 140–180</div>
+      <div class="range-item"><div class="range-dot" style="background:#ef4444"></div>Very High &gt;180</div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>History</span>
+      <span id="historyCount" style="color:var(--muted);font-size:0.78rem"></span>
+    </div>
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="tab-btn" onclick="setFilter('Fasting', this)">Fasting</button>
+      <button class="tab-btn" onclick="setFilter('After meal', this)">After meal</button>
+      <button class="tab-btn" onclick="setFilter('high', this)">High</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="empty"><div class="empty-icon">📋</div>No readings logged yet.</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+// ── Storage ────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'glucose_readings_v1';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// ── Status classification ──────────────────────────────────────────────
+function classify(val) {
+  if (val < 70)  return { label: 'Low',       cls: 'status-low',       dot: '#ef4444' };
+  if (val <= 140) return { label: 'Normal',    cls: 'status-normal',    dot: '#22c55e' };
+  if (val <= 180) return { label: 'High',      cls: 'status-high',      dot: '#f59e0b' };
+  return              { label: 'Very High', cls: 'status-very-high', dot: '#ef4444' };
+}
+
+// ── Current filter ─────────────────────────────────────────────────────
+let currentFilter = 'all';
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistory();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────
+function render() {
+  const readings = load();
+  renderLatest(readings);
+  renderStats(readings);
+  renderHistory();
+  renderChart(readings);
+}
+
+function renderLatest(readings) {
+  if (!readings.length) {
+    document.getElementById('latestDisplay').innerHTML = `
+      <div class="empty"><div class="empty-icon">📊</div>No readings yet.</div>`;
+    return;
+  }
+  const r = readings[readings.length - 1];
+  const s = classify(r.value);
+  const dt = new Date(r.timestamp);
+  const timeStr = dt.toLocaleString('en-US', {month:'short',day:'numeric',
+    hour:'numeric',minute:'2-digit',hour12:true});
+
+  // Progress bar for visual range (20–600 scale)
+  const pct = Math.min(Math.max((r.value - 20) / 580 * 100, 2), 98);
+  const fillColor = r.value < 70 ? '#ef4444' : r.value <= 140 ? '#22c55e' :
+                    r.value <= 180 ? '#f59e0b' : '#ef4444';
+
+  document.getElementById('latestDisplay').innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:2px">
+      <div class="latest-value" style="color:${fillColor}">${r.value}</div>
+      <div class="latest-unit">mg/dL</div>
+    </div>
+    <span class="latest-status ${s.cls}">${s.label}</span>
+    <div class="range-bar" style="margin-top:12px">
+      <div class="range-fill" style="width:${pct}%;background:${fillColor}"></div>
+    </div>
+    <div class="range-labels"><span>20</span><span>70</span><span>140</span><span>180</span><span>600</span></div>
+    <div class="latest-time" style="margin-top:8px">
+      ${r.context} · ${timeStr}${r.note ? ' · ' + r.note : ''}
+    </div>`;
+}
+
+function renderStats(readings) {
+  if (!readings.length) {
+    document.getElementById('statsRow').style.display = 'none';
+    return;
+  }
+  document.getElementById('statsRow').style.display = 'grid';
+  const vals = readings.map(r => r.value);
+  const avg = Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const loS = classify(lo);
+  const hiS = classify(hi);
+  document.getElementById('statAvg').textContent = avg;
+  document.getElementById('statAvg').style.color = classify(avg).dot;
+  document.getElementById('statLow').textContent = lo;
+  document.getElementById('statLow').style.color = loS.dot;
+  document.getElementById('statHigh').textContent = hi;
+  document.getElementById('statHigh').style.color = hiS.dot;
+}
+
+function renderHistory() {
+  const readings = load();
+  const el = document.getElementById('historyList');
+  document.getElementById('historyCount').textContent = `${readings.length} total`;
+
+  let filtered = [...readings].reverse();
+  if (currentFilter === 'Fasting')    filtered = filtered.filter(r => r.context === 'Fasting');
+  if (currentFilter === 'After meal') filtered = filtered.filter(r => r.context === 'After meal');
+  if (currentFilter === 'high')       filtered = filtered.filter(r => r.value > 140);
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>No matching readings.</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const s = classify(r.value);
+    const dt = new Date(r.timestamp);
+    const timeStr = dt.toLocaleString('en-US', {month:'short',day:'numeric',
+      hour:'numeric',minute:'2-digit',hour12:true});
+    return `
+    <div class="history-item">
+      <div class="history-dot" style="background:${s.dot}"></div>
+      <div class="history-value" style="color:${s.dot}">${r.value}</div>
+      <div class="history-info">
+        <div class="history-context">${r.context}${r.note ? ' · ' + r.note : ''}</div>
+        <div class="history-time">${timeStr}</div>
+      </div>
+      <button class="history-delete" onclick="deleteReading('${r.id}')" title="Delete">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderChart(readings) {
+  if (readings.length < 2) {
+    document.getElementById('chartCard').style.display = 'none';
+    return;
+  }
+  document.getElementById('chartCard').style.display = 'block';
+
+  // Last 14 days, group by date, take average per day
+  const cutoff = Date.now() - 14 * 86400000;
+  const recent = readings.filter(r => r.timestamp > cutoff);
+  if (recent.length < 2) return;
+
+  const byDate = {};
+  recent.forEach(r => {
+    const d = new Date(r.timestamp).toLocaleDateString('en-US', {month:'short',day:'numeric'});
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(r.value);
+  });
+  const labels = Object.keys(byDate);
+  const values = labels.map(d => Math.round(byDate[d].reduce((a,b)=>a+b,0)/byDate[d].length));
+
+  const canvas = document.getElementById('glucoseChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 360;
+  const H = 120;
+  canvas.width = W * window.devicePixelRatio;
+  canvas.height = H * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  ctx.clearRect(0,0,W,H);
+
+  const min = Math.min(...values, 60);
+  const max = Math.max(...values, 200);
+  const pad = { l:30, r:10, t:10, b:24 };
+  const gW = W - pad.l - pad.r;
+  const gH = H - pad.t - pad.b;
+
+  const x = (i) => pad.l + (i / (values.length - 1)) * gW;
+  const y = (v) => pad.t + gH - ((v - min) / (max - min)) * gH;
+
+  // Grid lines at 70, 140, 180
+  [70, 140, 180].forEach(line => {
+    if (line < min || line > max) return;
+    const yy = y(line);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#555';
+    ctx.font = '9px sans-serif';
+    ctx.fillText(line, 2, yy + 3);
+  });
+
+  // Line
+  ctx.beginPath();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#3b82f6';
+  values.forEach((v, i) => {
+    if (i === 0) ctx.moveTo(x(i), y(v));
+    else ctx.lineTo(x(i), y(v));
+  });
+  ctx.stroke();
+
+  // Dots
+  values.forEach((v, i) => {
+    const s = classify(v);
+    ctx.beginPath();
+    ctx.arc(x(i), y(v), 4, 0, Math.PI * 2);
+    ctx.fillStyle = s.dot;
+    ctx.fill();
+  });
+
+  // X labels
+  ctx.fillStyle = '#666';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  labels.forEach((lbl, i) => {
+    if (values.length <= 7 || i % Math.ceil(values.length / 7) === 0) {
+      ctx.fillText(lbl, x(i), H - 6);
+    }
+  });
+}
+
+// ── Log reading ────────────────────────────────────────────────────────
+function logReading() {
+  const valStr = document.getElementById('glucoseInput').value.trim();
+  const val = parseInt(valStr);
+  if (!valStr || isNaN(val) || val < 20 || val > 600) {
+    showToast('⚠️ Enter a valid reading (20–600 mg/dL)');
+    document.getElementById('glucoseInput').focus();
+    return;
+  }
+  const context = document.getElementById('contextInput').value;
+  const note    = document.getElementById('noteInput').value.trim();
+  const dateVal = document.getElementById('dateInput').value;
+  const timeVal = document.getElementById('timeInput').value;
+
+  let timestamp;
+  if (dateVal && timeVal) {
+    timestamp = new Date(dateVal + 'T' + timeVal).getTime();
+  } else if (dateVal) {
+    timestamp = new Date(dateVal + 'T12:00').getTime();
+  } else {
+    timestamp = Date.now();
+  }
+
+  const readings = load();
+  readings.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+    value: val,
+    context,
+    note,
+    timestamp,
+  });
+  save(readings);
+
+  // Reset form
+  document.getElementById('glucoseInput').value = '';
+  document.getElementById('noteInput').value = '';
+  document.getElementById('rangeIndicator').style.display = 'none';
+  setDefaultDateTime();
+
+  const s = classify(val);
+  showToast(`✅ Logged ${val} mg/dL — ${s.label}`);
+  render();
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────
+function deleteReading(id) {
+  const readings = load().filter(r => r.id !== id);
+  save(readings);
+  render();
+  showToast('Deleted');
+}
+
+// ── Export CSV ─────────────────────────────────────────────────────────
+function exportCSV() {
+  const readings = load();
+  if (!readings.length) { showToast('No data to export'); return; }
+  const rows = [['Date','Time','Value (mg/dL)','Context','Status','Note']];
+  readings.forEach(r => {
+    const dt = new Date(r.timestamp);
+    rows.push([
+      dt.toLocaleDateString(),
+      dt.toLocaleTimeString(),
+      r.value,
+      r.context,
+      classify(r.value).label,
+      r.note || '',
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `glucose_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Live range indicator while typing ─────────────────────────────────
+document.getElementById('glucoseInput').addEventListener('input', function() {
+  const val = parseInt(this.value);
+  const ind = document.getElementById('rangeIndicator');
+  const fill = document.getElementById('rangeFill');
+  if (!this.value || isNaN(val)) { ind.style.display = 'none'; return; }
+  ind.style.display = 'block';
+  const pct = Math.min(Math.max((val - 20) / 580 * 100, 2), 98);
+  const color = val < 70 ? '#ef4444' : val <= 140 ? '#22c55e' : val <= 180 ? '#f59e0b' : '#ef4444';
+  fill.style.width = pct + '%';
+  fill.style.background = color;
+});
+
+// ── Set default date/time ──────────────────────────────────────────────
+function setDefaultDateTime() {
+  const now = new Date();
+  document.getElementById('dateInput').value = now.toISOString().slice(0, 10);
+  document.getElementById('timeInput').value = now.toTimeString().slice(0, 5);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+setDefaultDateTime();
+render();
+</script>
+</body>
+</html>
