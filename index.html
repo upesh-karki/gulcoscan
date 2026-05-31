@@ -8,6 +8,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-title" content="GlucoScan">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>GlucoScan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -437,6 +442,19 @@
     .modal-sheet{max-width:400px;margin:0 auto;border-radius:20px 20px 0 0;}
   }
 </style>
+<script>
+// Force-reload if home-screen shortcut has stale cache (bump BUILD on each deploy)
+(function(){
+  var BUILD = 5;
+  var stored = localStorage.getItem('glucoscan_build');
+  if (stored && parseInt(stored) !== BUILD) {
+    localStorage.setItem('glucoscan_build', String(BUILD));
+    location.reload();
+  } else if (!stored) {
+    localStorage.setItem('glucoscan_build', String(BUILD));
+  }
+})();
+</script>
 </head>
 <body>
 
@@ -711,7 +729,8 @@ let chartInstance = null;
 let stream = null;
 let currentTag = '';
 let facing = 'environment';
-let dbPromise = null;
+let db = null;               // cached DB connection
+let dbOpen = false;           // true after first loadReadings finishes
 
 // ── INDEXEDDB SETUP ──
 // Survives cache clears, larger storage, more reliable than localStorage
@@ -721,33 +740,29 @@ const STORE_NAME = 'readings';
 const APP_VERSION = 4;
 
 function openDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_NAME)) {
+        d.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
     };
     req.onsuccess = e => resolve(e.target.result);
-    req.onerror = e => {
-      console.warn('IndexedDB failed, falling back to localStorage', e);
-      resolve(null); // null = fallback
-    };
+    req.onerror = () => resolve(null);
   });
-  return dbPromise;
 }
 
 async function loadReadings() {
-  const db = await openDB();
+  if (dbOpen) return;                // already initialised
+  const d = await openDB();
 
-  if (db) {
-    // IndexedDB is available — try to load
+  if (d) {
+    db = d;
     try {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const all = await new Promise((res, rej) => {
+      const all = await new Promise(res => {
         const req = store.getAll();
         req.onsuccess = () => res(req.result || []);
         req.onerror = () => res(null);
@@ -755,13 +770,11 @@ async function loadReadings() {
       if (all !== null) {
         readings = all;
         readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        // Check if localStorage has old data that needs migrating
         await migrateFromLocalStorage(db);
+        dbOpen = true;
         return;
       }
-    } catch (e) {
-      console.warn('IndexedDB read failed, trying localStorage fallback', e);
-    }
+    } catch (_) {}
   }
 
   // Fallback: load from localStorage
@@ -771,11 +784,9 @@ async function loadReadings() {
       readings = JSON.parse(raw);
       readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
-  } catch (e) {
-    readings = [];
-  }
-
+  } catch (_) {}
   if (!Array.isArray(readings)) readings = [];
+  dbOpen = true;
 }
 
 async function migrateFromLocalStorage(db) {
@@ -1797,8 +1808,9 @@ function initTheme() {
 
 // ── BOOT ──
 document.addEventListener('DOMContentLoaded', () => {
-  // Inject tab bar
-  const tabBar = document.createElement('div');
+  try {
+    // Inject tab bar
+    const tabBar = document.createElement('div');
   tabBar.className = 'tab-bar';
   tabBar.innerHTML = `
     <button class="tab-btn active" data-tab="home">
@@ -1838,6 +1850,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkForUpdate();
   });
+  } catch (e) {
+    // Boot failed — show a manual recovery button
+    document.body.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:40px;text-align:center;gap:16px;">' +
+      '<div style="font-size:48px;">⚠️</div>' +
+      '<div style="font-size:18px;font-weight:600;">App failed to load</div>' +
+      '<div style="font-size:13px;color:var(--text-3);max-width:300px;">This is usually caused by a stale cached version.</div>' +
+      '<button onclick="localStorage.clear();location.reload()" style="padding:12px 28px;border-radius:12px;background:var(--accent);color:white;font-size:15px;font-weight:600;">Clear Cache &amp; Reload</button>' +
+      '<div style="font-size:11px;color:var(--text-3);">Your data is backed up in IndexedDB and will not be lost.</div>' +
+      '</div>';
+  }
 });
 
 // ── AUTO-UPDATE CHECK ──

@@ -1,0 +1,11 @@
+{
+  "name": "GlucoScan",
+  "short_name": "GlucoScan",
+  "start_url": "./?homescreen=1",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0ea5e9",
+  "description": "Privacy-first blood glucose tracker",
+  "icons": []
+}
