@@ -1572,6 +1572,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Self-check: verify we're running the latest HTML
   checkForUpdate();
+
+  // Re-check when user switches back to this tab (e.g. from another app)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
 });
 
 // ── AUTO-UPDATE CHECK ──
