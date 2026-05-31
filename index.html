@@ -600,7 +600,7 @@ let facing = 'environment';
 
 // ── DATA ──
 // ── APP VERSION (bump this when you make breaking changes) ──
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 const VERSION_KEY = 'glucoscan_version';
 
 function loadReadings() {
@@ -941,22 +941,9 @@ function getChartData(range) {
 
 // ── UI BINDING ──
 function bindUI() {
-  // Tab navigation
+  // Tab navigation — delegate to switchTab
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      const target = document.getElementById(btn.dataset.tab + 'Screen');
-      if (target) {
-        target.classList.add('active');
-        target.classList.remove('slide-in');
-        void target.offsetWidth;
-        target.classList.add('slide-in');
-        if (btn.dataset.tab === 'home') renderHome();
-        if (btn.dataset.tab === 'history') renderHistory();
-      }
-    });
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
   // Settings
