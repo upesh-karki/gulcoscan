@@ -125,6 +125,7 @@
   }
   .toggle-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
   .toggle-btn:hover{border-color:var(--text-3)}
+  /* ── CHART ── */
   .chart-wrapper{
     position:relative;
     width:100%;
@@ -132,22 +133,6 @@
     min-height:180px;
     border-radius:8px;
     overflow:hidden;
-    transition:height 0.4s var(--ease);
-  }
-  .chart-wrapper.expanded{
-    position:fixed;
-    inset:80px 16px auto;
-    height:auto;
-    max-height:60vh;
-    z-index:250;
-    background:var(--card);
-    border:1px solid var(--border);
-    border-radius:14px;
-    padding:16px;
-    box-shadow:0 8px 40px rgba(0,0,0,0.4);
-  }
-  .chart-wrapper.expanded + .expand-chart-btn{
-    display:none;
   }
   #trendChart{
     width:100% !important;
@@ -155,29 +140,84 @@
     display:block;
     border-radius:8px;
   }
-  .chart-wrapper.expanded #trendChart{
-    height:300px !important;
-  }
   .expand-chart-btn{
     position:absolute;
-    top:0;right:0;
-    width:28px;height:28px;
-    border-radius:0 8px 0 8px;
-    background:rgba(0,0,0,0.15);
-    color:var(--text-3);
-    font-size:11px;
+    top:4px;right:4px;
+    width:30px;height:30px;
+    border-radius:8px;
+    background:var(--card);
+    border:1px solid var(--border);
+    color:var(--text-2);
+    font-size:14px;
     display:flex;align-items:center;justify-content:center;
     opacity:0;
     transition:opacity 0.15s;
+    z-index:5;
   }
-  .card:hover .expand-chart-btn{opacity:1;}
-  .chart-overlay{
+  .chart-wrapper:hover .expand-chart-btn,
+  .chart-wrapper:focus-within .expand-chart-btn{opacity:1;}
+
+  /* ── CHART POPUP ── */
+  .chart-popup-overlay{
     display:none;
     position:fixed;inset:0;
-    background:rgba(0,0,0,0.5);
-    z-index:240;
+    z-index:400;
+    background:rgba(0,0,0,0.65);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    align-items:center;
+    justify-content:center;
+    padding:24px;
   }
-  .chart-overlay.open{display:block}
+  .chart-popup-overlay.open{display:flex;}
+  .chart-popup{
+    width:100%;
+    max-width:500px;
+    max-height:85vh;
+    background:var(--card);
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 10px 50px rgba(0,0,0,0.5);
+    display:flex;
+    flex-direction:column;
+  }
+  .chart-popup-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    flex-shrink:0;
+  }
+  .chart-popup-title{
+    font-size:16px;
+    font-weight:700;
+  }
+  .chart-popup-close{
+    width:32px;height:32px;
+    border-radius:8px;
+    background:var(--border);
+    color:var(--text-2);
+    font-size:16px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .chart-popup-body{
+    flex:1;
+    min-height:300px;
+    position:relative;
+  }
+  .chart-popup-body canvas{
+    width:100% !important;
+    height:100% !important;
+    min-height:300px;
+  }
+  .chart-popup .range-toggles-sm{
+    display:flex;
+    gap:8px;
+    flex-shrink:0;
+    margin-top:12px;
+    justify-content:center;
+  }
 
   /* ── INSIGHT ── */
   .insight{
@@ -437,7 +477,25 @@
         <canvas id="trendChart"></canvas>
         <button class="expand-chart-btn" id="expandChartBtn">⛶</button>
       </div>
-      <div class="chart-overlay" id="chartOverlay"></div>
+
+      <!-- Chart popup -->
+      <div class="chart-popup-overlay" id="chartPopupOverlay">
+        <div class="chart-popup">
+          <div class="chart-popup-header">
+            <span class="chart-popup-title">📈 Glucose Trend</span>
+            <button class="chart-popup-close" id="chartPopupClose">✕</button>
+          </div>
+          <div class="chart-popup-body">
+            <canvas id="popupChart" style="width:100%;min-height:300px;"></canvas>
+          </div>
+          <div class="range-toggles-sm" id="popupRangeToggle">
+            <button class="toggle-btn active" data-range="7">7d</button>
+            <button class="toggle-btn" data-range="14">14d</button>
+            <button class="toggle-btn" data-range="30">30d</button>
+            <button class="toggle-btn" data-range="90">90d</button>
+          </div>
+        </div>
+      </div>
     </div>
     <!-- Insight -->
     <div class="insight" id="insightBox">
@@ -966,21 +1024,144 @@ function updateChartData() {
 }
 
 // ── CHART EXPAND ──
-let chartExpanded = false;
+let popupChartInstance = null;
+let popupChartRange = 7;
 
-toggleChartExpand = function() {
-  const wrapper = document.getElementById('chartWrapper');
-  const overlay = document.getElementById('chartOverlay');
-  chartExpanded = !chartExpanded;
-  wrapper.classList.toggle('expanded', chartExpanded);
-  overlay.classList.toggle('open', chartExpanded);
-  // Re-render chart to fill new size
-  setTimeout(() => { if (chartInstance) chartInstance.resize(); }, 50);
-};
+function openChartPopup() {
+  const overlay = document.getElementById('chartPopupOverlay');
+  overlay.classList.add('open');
+
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById('popupChart');
+    if (popupChartInstance) popupChartInstance.destroy();
+
+    const data = getChartData(popupChartRange);
+
+    // Label format: show full date with day names for better readability
+    const fullLabels = data.fullDates || data.labels.map((l, i) => {
+      if (popupChartRange > 30) return l;
+      // Show actual date for hover
+      return data.labels[i];
+    });
+
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+    popupChartInstance = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Glucose (mg/dL)',
+          data: data.values,
+          tension: 0.3,
+          borderWidth: 2.5,
+          borderColor: '#0ea5e9',
+          backgroundColor: 'rgba(14,165,233,0.1)',
+          fill: true,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#0ea5e9',
+          pointBorderColor: isDark ? '#18181b' : '#ffffff',
+          pointBorderWidth: 1.5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            backgroundColor: isDark ? '#18181b' : '#ffffff',
+            titleColor: isDark ? '#f0f0f0' : '#111111',
+            bodyColor: isDark ? '#a1a1aa' : '#52525b',
+            borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 10,
+            titleAlign: 'center',
+            callbacks: {
+              title: function(items) {
+                return items[0].label;
+              },
+              label: function(context) {
+                const v = context.parsed.y;
+                let range = 'Normal';
+                if (v < 70) range = '⬇ Low';
+                else if (v > 180) range = '⬆ High';
+                else if (v > 140) range = '↗ Elevated';
+                return ' ' + v + ' mg/dL  ·  ' + range;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              maxRotation: 0,
+              autoSkip: true,
+              color: isDark ? '#71717a' : '#a1a1aa',
+              font: { size: 11 }
+            }
+          },
+          y: {
+            min: 40,
+            max: 240,
+            grid: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)' },
+            ticks: {
+              color: isDark ? '#71717a' : '#a1a1aa',
+              font: { size: 11 },
+              stepSize: 40
+            }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        },
+        onClick: function(e) {
+          const points = this.getElementsAtEventForMode(e, 'index', { intersect: false });
+          if (points.length) {
+            const idx = points[0].index;
+            const val = this.data.datasets[0].data[idx];
+            const label = this.data.labels[idx];
+            if (val !== null && val !== undefined) {
+              // Show a quick highlight
+              this.setActiveElements([{ datasetIndex: 0, index: idx }]);
+              this.update('none');
+            }
+          }
+        }
+      }
+    });
+
+    // Force reflow
+    setTimeout(() => { if (popupChartInstance) popupChartInstance.resize(); }, 100);
+  });
+}
+
+function closeChartPopup() {
+  document.getElementById('chartPopupOverlay').classList.remove('open');
+}
 
 function bindChartExpand() {
-  document.getElementById('expandChartBtn').addEventListener('click', toggleChartExpand);
-  document.getElementById('chartOverlay').addEventListener('click', toggleChartExpand);
+  document.getElementById('expandChartBtn').addEventListener('click', openChartPopup);
+  document.getElementById('chartPopupClose').addEventListener('click', closeChartPopup);
+  document.getElementById('chartPopupOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('chartPopupOverlay')) closeChartPopup();
+  });
+
+  // Popup range toggles
+  document.querySelectorAll('#popupRangeToggle .toggle-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#popupRangeToggle .toggle-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      popupChartRange = parseInt(b.dataset.range);
+      openChartPopup();
+    });
+  });
 }
 
 function getChartData(range) {
