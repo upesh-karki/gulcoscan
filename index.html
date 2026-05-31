@@ -29,7 +29,26 @@
     --safe-bottom:env(safe-area-inset-bottom,0px);
     --tab-h:60px;
     --radius:14px;
-    --ease:cubic-bezier(0.25,0.46,0.45,0.94)
+    --ease:cubic-bezier(0.25,0.46,0.45,0.94);
+    --tab-bar-bg:rgba(13,13,13,0.92)
+  }
+
+  /* Light theme */
+  [data-theme="light"]{
+    --bg:#f5f5f5;
+    --card:#ffffff;
+    --card-hover:#f0f0f0;
+    --border:rgba(0,0,0,0.08);
+    --accent:#0284c7;
+    --accent-dim:rgba(2,132,199,0.1);
+    --text:#18181b;
+    --text-2:#52525b;
+    --text-3:#a1a1aa;
+    --low:#dc2626;
+    --normal:#16a34a;
+    --high:#d97706;
+    --very-high:#dc2626;
+    --tab-bar-bg:rgba(245,245,245,0.92)
   }
   html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;}
   button{cursor:pointer;font-family:inherit;border:none;outline:none;background:none;color:inherit;}
@@ -118,7 +137,7 @@
   .tab-bar{
     position:fixed;bottom:0;left:0;right:0;
     height:calc(var(--tab-h) + var(--safe-bottom));
-    background:rgba(13,13,13,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    background:var(--tab-bar-bg);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
     border-top:1px solid var(--border);display:flex;z-index:100;
     padding-bottom:var(--safe-bottom);
   }
@@ -395,6 +414,19 @@
   </div>
   <div class="scroll">
     <div class="card" style="padding:0;">
+      <div class="settings-item">
+        <div>
+          <div class="settings-label">App Theme</div>
+          <div class="settings-desc">Choose your preferred appearance</div>
+        </div>
+        <div style="display:flex;gap:6px;" id="themeChooser">
+          <button class="toggle-btn theme-btn" data-theme-mode="auto">Auto</button>
+          <button class="toggle-btn theme-btn" data-theme-mode="light">☀️</button>
+          <button class="toggle-btn theme-btn" data-theme-mode="dark">🌙</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;padding:0;">
       <div class="settings-item">
         <div>
           <div class="settings-label">Reset All Data</div>
@@ -690,7 +722,7 @@ function renderHome() {
   const inRange = d30.filter(v => v >= 70 && v <= 180).length;
   document.getElementById('statInRange').textContent = d30.length ? Math.round(inRange / d30.length * 100) + '%' : '--%';
 
-  setupChart();
+  updateChartData();
   updateInsight();
 }
 
@@ -772,13 +804,23 @@ function updateInsight() {
 
 // ── CHART ──
 function setupChart() {
-  const ctx = document.getElementById('trendChart');
-  if (!ctx) return;
+  const canvas = document.getElementById('trendChart');
+  const card = canvas && canvas.closest('.card');
+  if (!canvas) return;
+
+  // Ensure canvas has proper size
+  const parent = canvas.parentElement;
+  if (parent && !canvas.width) {
+    canvas.style.width = (parent.clientWidth - 36) + 'px';
+    canvas.style.height = '160px';
+  }
+
   if (chartInstance) chartInstance.destroy();
 
   const data = getChartData(currentRange);
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  chartInstance = new Chart(ctx, {
+  chartInstance = new Chart(canvas, {
     type: 'line',
     data: {
       labels: data.labels,
@@ -790,9 +832,8 @@ function setupChart() {
         borderColor: '#0ea5e9',
         backgroundColor: 'rgba(14,165,233,0.12)',
         fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        pointHitRadius: 10
+        pointRadius: data.values.some(v => v !== null) ? 0 : 0,
+        pointHoverRadius: 5
       }]
     },
     options: {
@@ -803,10 +844,10 @@ function setupChart() {
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: '#18181b',
-          titleColor: '#f0f0f0',
-          bodyColor: '#a1a1aa',
-          borderColor: 'rgba(255,255,255,0.07)',
+          backgroundColor: isDark ? '#18181b' : '#ffffff',
+          titleColor: isDark ? '#f0f0f0' : '#111111',
+          bodyColor: isDark ? '#a1a1aa' : '#52525b',
+          borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)',
           borderWidth: 1,
           padding: 10,
           cornerRadius: 8
@@ -815,13 +856,22 @@ function setupChart() {
       scales: {
         x: {
           grid: { display: false },
-          ticks: { maxRotation: 0, autoSkip: true, color: '#71717a', font: { size: 10 } }
+          ticks: {
+            maxRotation: 0,
+            autoSkip: true,
+            color: isDark ? '#71717a' : '#a1a1aa',
+            font: { size: 10 }
+          }
         },
         y: {
           min: 40,
           max: 240,
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#71717a', font: { size: 10 }, stepSize: 40 }
+          grid: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)' },
+          ticks: {
+            color: isDark ? '#71717a' : '#a1a1aa',
+            font: { size: 10 },
+            stepSize: 40
+          }
         }
       },
       interaction: {
@@ -830,8 +880,12 @@ function setupChart() {
       }
     }
   });
+}
 
-  // Range toggles
+// Bind range toggles once at boot (not every chart render)
+let rangeTogglesBound = false;
+function bindRangeToggles() {
+  if (rangeTogglesBound) return;
   document.querySelectorAll('#rangeToggle .toggle-btn').forEach(b => {
     b.addEventListener('click', () => {
       document.querySelectorAll('#rangeToggle .toggle-btn').forEach(x => x.classList.remove('active'));
@@ -840,6 +894,19 @@ function setupChart() {
       setupChart();
     });
   });
+  rangeTogglesBound = true;
+}
+
+// Update chart data without re-creating the whole chart
+function updateChartData() {
+  if (!chartInstance) {
+    setupChart();
+    return;
+  }
+  const data = getChartData(currentRange);
+  chartInstance.data.labels = data.labels;
+  chartInstance.data.datasets[0].data = data.values;
+  chartInstance.update('none');
 }
 
 function getChartData(range) {
@@ -1351,6 +1418,56 @@ function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
 
+// ── THEME ──
+let currentThemeMode = 'auto'; // auto | light | dark
+
+function applyTheme(mode) {
+  currentThemeMode = mode || 'auto';
+  const hour = new Date().getHours();
+  let theme;
+  if (mode === 'light') theme = 'light';
+  else if (mode === 'dark') theme = 'dark';
+  else theme = (hour >= 7 && hour < 20) ? 'light' : 'dark';
+
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('glucoscan_theme', mode);
+
+  // Re-render chart with new colors
+  if (chartInstance) {
+    const isDark = theme === 'dark';
+    chartInstance.options.plugins.tooltip.backgroundColor = isDark ? '#18181b' : '#ffffff';
+    chartInstance.options.plugins.tooltip.titleColor = isDark ? '#f0f0f0' : '#111111';
+    chartInstance.options.plugins.tooltip.bodyColor = isDark ? '#a1a1aa' : '#52525b';
+    chartInstance.options.plugins.tooltip.borderColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+    chartInstance.options.scales.y.grid.color = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+    chartInstance.options.scales.y.ticks.color = isDark ? '#71717a' : '#a1a1aa';
+    chartInstance.options.scales.x.ticks.color = isDark ? '#71717a' : '#a1a1aa';
+    chartInstance.update('none');
+  }
+
+  // Update theme button active states
+  document.querySelectorAll('#themeChooser .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.themeMode === mode);
+  });
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('glucoscan_theme') || 'auto';
+  applyTheme(saved);
+
+  // Bind theme chooser
+  document.querySelectorAll('#themeChooser .theme-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      applyTheme(b.dataset.themeMode);
+    });
+  });
+
+  // Auto-check every minute
+  setInterval(() => {
+    if (currentThemeMode === 'auto') applyTheme('auto');
+  }, 60000);
+}
+
 // ── CACHE BUST: force re-download if HTML changed ──
 // If user's browser is serving an old cached version, this tiny
 // version check won't change, but the user can hard-refresh.
@@ -1385,8 +1502,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Now init everything
   loadReadings();
   updateGreeting();
+  initTheme();
   renderAll();
   bindUI();
+  bindRangeToggles();
   setupChart();
 });
 </script>
