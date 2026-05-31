@@ -704,7 +704,6 @@
 
 
 <script>
-const STORAGE_KEY = 'glucoscan_readings';
 const TAGS = ['Before meal', 'After meal', 'Fasting', 'Bedtime', 'Random'];
 
 let readings = [];
@@ -712,58 +711,136 @@ let chartInstance = null;
 let stream = null;
 let currentTag = '';
 let facing = 'environment';
+let dbPromise = null;
 
-// ── INIT (called after DOM loaded below) ──
+// ── INDEXEDDB SETUP ──
+// Survives cache clears, larger storage, more reliable than localStorage
+const DB_NAME = 'GlucoScanDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'readings';
+const APP_VERSION = 4;
 
-// ── DATA ──
-// ── APP VERSION (bump this when you make breaking changes) ──
-const APP_VERSION = 3;
-const VERSION_KEY = 'glucoscan_version';
-
-function loadReadings() {
-  // Check if stored data is from an old version that needs migration
-  const storedVersion = parseInt(localStorage.getItem(VERSION_KEY)) || 0;
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      readings = JSON.parse(raw);
-      // Migration: old versions stored IDs as integers, new uses strings
-      if (storedVersion < 2 && Array.isArray(readings) && readings.length > 0) {
-        // Ensure timestamps are ISO strings and IDs are strings
-        readings = readings.map(r => ({
-          ...r,
-          id: String(r.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
-          timestamp: typeof r.timestamp === 'string' && r.timestamp.includes('T')
-            ? r.timestamp : new Date(r.timestamp).toISOString()
-        }));
-        // Save migrated data and update version marker
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
-        localStorage.setItem(VERSION_KEY, String(APP_VERSION));
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
-    }
-  } catch (e) {
-    console.warn('GlucoScan: failed to load saved data, starting fresh', e);
-    readings = [];
-  }
-
-  if (!Array.isArray(readings) || !readings.length) {
-    readings = [];
-  }
-
-  // Mark that we've migrated to the latest version
-  if (storedVersion < APP_VERSION) {
-    localStorage.setItem(VERSION_KEY, String(APP_VERSION));
-  }
-
-  readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => {
+      console.warn('IndexedDB failed, falling back to localStorage', e);
+      resolve(null); // null = fallback
+    };
+  });
+  return dbPromise;
 }
 
-function saveReadings() {
+async function loadReadings() {
+  const db = await openDB();
+
+  if (db) {
+    // IndexedDB is available — try to load
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const all = await new Promise((res, rej) => {
+        const req = store.getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => res(null);
+      });
+      if (all !== null) {
+        readings = all;
+        readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        // Check if localStorage has old data that needs migrating
+        await migrateFromLocalStorage(db);
+        return;
+      }
+    } catch (e) {
+      console.warn('IndexedDB read failed, trying localStorage fallback', e);
+    }
+  }
+
+  // Fallback: load from localStorage
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
+    const raw = localStorage.getItem('glucoscan_readings');
+    if (raw) {
+      readings = JSON.parse(raw);
+      readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }
   } catch (e) {
-    showToast('Could not save — storage full?');
+    readings = [];
+  }
+
+  if (!Array.isArray(readings)) readings = [];
+}
+
+async function migrateFromLocalStorage(db) {
+  try {
+    const raw = localStorage.getItem('glucoscan_readings');
+    if (!raw) return;
+    const old = JSON.parse(raw);
+    if (!Array.isArray(old) || !old.length) return;
+
+    // Check if we already have these in IndexedDB (dedup by id)
+    const existingIds = new Set(readings.map(r => r.id));
+    const toAdd = old.filter(r => !existingIds.has(r.id));
+    if (!toAdd.length) {
+      // All migrated, clear localStorage
+      localStorage.removeItem('glucoscan_readings');
+      return;
+    }
+
+    // Migrate
+    const migrated = toAdd.map(r => ({
+      ...r,
+      id: String(r.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+      timestamp: typeof r.timestamp === 'string' && r.timestamp.includes('T')
+        ? r.timestamp : new Date(r.timestamp).toISOString()
+    }));
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    for (const r of migrated) store.add(r);
+    await new Promise(res => tx.oncomplete = res);
+
+    readings = [...readings, ...migrated];
+    readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Clear old localStorage
+    localStorage.removeItem('glucoscan_readings');
+    localStorage.removeItem('glucoscan_version');
+  } catch (e) {
+    // Non-critical
+  }
+}
+
+async function saveReadings() {
+  const db = await openDB();
+  if (db) {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      for (const r of readings) store.put(r);
+      await new Promise((res, rej) => {
+        tx.oncomplete = res;
+        tx.onerror = () => rej(tx.error);
+      });
+      return;
+    } catch (e) {
+      console.warn('IndexedDB write failed, saving to localStorage', e);
+    }
+  }
+
+  // Fallback: localStorage
+  try {
+    localStorage.setItem('glucoscan_readings', JSON.stringify(readings));
+  } catch (e) {
+    showToast('Could not save readings');
   }
 }
 
@@ -782,6 +859,8 @@ function deleteReading(id) {
   readings = readings.filter(r => r.id !== id);
   saveReadings();
 }
+
+// ── LOCALSTORAGE CLEANUP ──
 
 // ── CLASSIFICATION ──
 function classify(v) {
@@ -1742,14 +1821,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.appendChild(tabBar);
 
   // Now init everything
-  loadReadings();
-  updateGreeting();
-  initTheme();
-  renderAll();
-  bindUI();
-  bindRangeToggles();
-  bindChartExpand();
-  setupChart();
+  loadReadings().then(() => {
+    updateGreeting();
+    initTheme();
+    renderAll();
+    bindUI();
+    bindRangeToggles();
+    bindChartExpand();
+    setupChart();
+  });
 
   // Self-check: verify we're running the latest HTML
   checkForUpdate();
