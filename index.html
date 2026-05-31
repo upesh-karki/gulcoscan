@@ -122,7 +122,59 @@
   }
   .toggle-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
   .toggle-btn:hover{border-color:var(--text-3)}
-  #trendChart{width:100%;border-radius:8px;display:block;}
+  .chart-wrapper{
+    position:relative;
+    width:100%;
+    height:180px;
+    min-height:180px;
+    border-radius:8px;
+    overflow:hidden;
+    transition:height 0.4s var(--ease);
+  }
+  .chart-wrapper.expanded{
+    position:fixed;
+    inset:80px 16px auto;
+    height:auto;
+    max-height:60vh;
+    z-index:250;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px;
+    box-shadow:0 8px 40px rgba(0,0,0,0.4);
+  }
+  .chart-wrapper.expanded + .expand-chart-btn{
+    display:none;
+  }
+  #trendChart{
+    width:100% !important;
+    height:100% !important;
+    display:block;
+    border-radius:8px;
+  }
+  .chart-wrapper.expanded #trendChart{
+    height:300px !important;
+  }
+  .expand-chart-btn{
+    position:absolute;
+    top:0;right:0;
+    width:28px;height:28px;
+    border-radius:0 8px 0 8px;
+    background:rgba(0,0,0,0.15);
+    color:var(--text-3);
+    font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;
+    transition:opacity 0.15s;
+  }
+  .card:hover .expand-chart-btn{opacity:1;}
+  .chart-overlay{
+    display:none;
+    position:fixed;inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:240;
+  }
+  .chart-overlay.open{display:block}
 
   /* ── INSIGHT ── */
   .insight{
@@ -378,7 +430,11 @@
         <button class="toggle-btn" data-range="30">30d</button>
         <button class="toggle-btn" data-range="90">90d</button>
       </div>
-      <canvas id="trendChart" height="160"></canvas>
+      <div class="chart-wrapper" id="chartWrapper">
+        <canvas id="trendChart"></canvas>
+        <button class="expand-chart-btn" id="expandChartBtn">⛶</button>
+      </div>
+      <div class="chart-overlay" id="chartOverlay"></div>
     </div>
     <!-- Insight -->
     <div class="insight" id="insightBox">
@@ -805,15 +861,12 @@ function updateInsight() {
 // ── CHART ──
 function setupChart() {
   const canvas = document.getElementById('trendChart');
-  const card = canvas && canvas.closest('.card');
+  const wrapper = document.getElementById('chartWrapper');
   if (!canvas) return;
 
-  // Ensure canvas has proper size
-  const parent = canvas.parentElement;
-  if (parent && !canvas.width) {
-    canvas.style.width = (parent.clientWidth - 36) + 'px';
-    canvas.style.height = '160px';
-  }
+  // Fill the wrapper — no fixed height set via JS, CSS handles it
+  canvas.style.width = '';
+  canvas.style.height = '';
 
   if (chartInstance) chartInstance.destroy();
 
@@ -907,6 +960,24 @@ function updateChartData() {
   chartInstance.data.labels = data.labels;
   chartInstance.data.datasets[0].data = data.values;
   chartInstance.update('none');
+}
+
+// ── CHART EXPAND ──
+let chartExpanded = false;
+
+toggleChartExpand = function() {
+  const wrapper = document.getElementById('chartWrapper');
+  const overlay = document.getElementById('chartOverlay');
+  chartExpanded = !chartExpanded;
+  wrapper.classList.toggle('expanded', chartExpanded);
+  overlay.classList.toggle('open', chartExpanded);
+  // Re-render chart to fill new size
+  setTimeout(() => { if (chartInstance) chartInstance.resize(); }, 50);
+};
+
+function bindChartExpand() {
+  document.getElementById('expandChartBtn').addEventListener('click', toggleChartExpand);
+  document.getElementById('chartOverlay').addEventListener('click', toggleChartExpand);
 }
 
 function getChartData(range) {
@@ -1493,6 +1564,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAll();
   bindUI();
   bindRangeToggles();
+  bindChartExpand();
   setupChart();
 });
 </script>
