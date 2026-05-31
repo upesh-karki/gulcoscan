@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlucoScan — Google Sheets Backup Setup</title>
+<style>
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    background: #0d0d0d;
+    color: #f0f0f0;
+    line-height: 1.6;
+  }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: #0ea5e9; }
+  p, li { color: #a1a1aa; font-size: 14px; }
+  ol, ul { padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  .step {
+    background: #18181b;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .step-num {
+    display: inline-block;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #0ea5e9;
+    color: white;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 28px;
+    margin-right: 8px;
+  }
+  code {
+    background: rgba(14,165,233,0.1);
+    color: #0ea5e9;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    word-break: break-all;
+  }
+  .tip {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #f59e0b;
+    margin: 12px 0;
+  }
+  .success-box {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+  }
+  hr { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 32px 0; }
+</style>
+</head>
+<body>
+
+<h1>☁️ GlucoScan — Google Sheets Backup</h1>
+<p>Set up a private, automatic backup of all your readings to Google Sheets. Your data stays in your own Google account — nobody else can see it.</p>
+
+<div class="success-box">
+  <strong>✅ How it works:</strong> Every time you save a reading, the app sends a copy to your private Google Sheet. If you lose your phone data, you can restore everything from the sheet.
+</div>
+
+<h2>Setup Steps</h2>
+
+<div class="step">
+  <div><span class="step-num">1</span> <strong>Create a Google Sheet</strong></div>
+  <ol>
+    <li>Go to <code>sheets.new</code> in your browser</li>
+    <li>Rename it to something like <strong>"GlucoScan Backup"</strong></li>
+    <li>In <strong>Row 1</strong>, add these headers:
+      <br><code>ID | Timestamp | Value | Tag | Source</code></li>
+    <li>Copy the Sheet ID from the URL:
+      <br><code>docs.google.com/spreadsheets/d/<strong>{SHEET_ID}</strong>/edit</code></li>
+  </ol>
+</div>
+
+<div class="step">
+  <div><span class="step-num">2</span> <strong>Open Apps Script</strong></div>
+  <ol>
+    <li>In your sheet, click <strong>Extensions → Apps Script</strong></li>
+    <li>Delete any default code in the editor</li>
+    <li>Paste the entire code from <code>backup-script.gs</code></li>
+  </ol>
+</div>
+
+<div class="step">
+  <div><span class="step-num">3</span> <strong>Configure the Script</strong></div>
+  <ol>
+    <li>In the script editor, find these two lines at the top:</li>
+  </ol>
+  <pre><code>const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE';
+const SECRET_TOKEN = 'YOUR_SECRET_TOKEN_HERE';</code></pre>
+  <ol start="2">
+    <li>Replace <code>YOUR_GOOGLE_SHEET_ID_HERE</code> with the Sheet ID from Step 1</li>
+    <li>Replace <code>YOUR_SECRET_TOKEN_HERE</code> with a random string — make it unique! Example: <code>glu-3a7f-k9x2</code></li>
+  </ol>
+  <div class="tip">Your token is like a password — keep it secret. Only you and the GlucoScan app need it.</div>
+</div>
+
+<div class="step">
+  <div><span class="step-num">4</span> <strong>Deploy the Web App</strong></div>
+  <ol>
+    <li>Click <strong>Deploy → New deployment</strong></li>
+    <li>Click the gear icon ⚙️ and choose <strong>Web app</strong></li>
+    <li>Set:
+      <ul>
+        <li><strong>Execute as:</strong> Me</li>
+        <li><strong>Who has access:</strong> Anyone</li>
+      </ul>
+    </li>
+    <li>Click <strong>Deploy</strong></li>
+    <li>Authorize the app (it only accesses your sheet)</li>
+    <li><strong>Copy the Web App URL</strong> that appears</li>
+  </ol>
+  <div class="tip">"Anyone" access is fine because the script checks the secret token. Without the token, nobody can read or write your data.</div>
+</div>
+
+<div class="step">
+  <div><span class="step-num">5</span> <strong>Connect GlucoScan</strong></div>
+  <ol>
+    <li>Open the GlucoScan app on your phone</li>
+    <li>Go to <strong>Settings → Backup to Google Sheets</strong></li>
+    <li>Paste the Web App URL from Step 4</li>
+    <li>Enter your <strong>Secret Token</strong></li>
+    <li>Tap <strong>Save</strong> — you're done! ✅</li>
+  </ol>
+</div>
+
+<hr>
+
+<h2>What Happens Next</h2>
+<ul>
+  <li><strong>Auto-sync:</strong> Every reading you save is sent to your sheet immediately</li>
+  <li><strong>Restore:</strong> In Settings, tap "Restore from Backup" to pull all readings from your sheet</li>
+  <li><strong>No data loss:</strong> Even if you clear your phone, your readings live in the sheet forever</li>
+</ul>
+
+<div class="tip">
+  <strong>First sync test:</strong> After setup, save one reading and check your Google Sheet. A new row should appear within seconds.
+</div>
+
+<hr>
+
+<h2>Troubleshooting</h2>
+<ul>
+  <li><strong>"Unauthorized" error</strong> — check your secret token matches between the script and the app</li>
+  <li><strong>"Script not found"</strong> — make sure you deployed the web app and copied the right URL</li>
+  <li><strong>Network error</strong> — check your internet connection</li>
+  <li><strong>Data not appearing in sheet</strong> — check the sheet has headers in Row 1</li>
+</ul>
+
+</body>
+</html>

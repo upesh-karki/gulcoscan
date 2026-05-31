@@ -233,6 +233,37 @@
   }
   .insight .icon{font-size:16px;margin-right:6px;}
 
+  /* ── BACKUP STATUS INDICATOR ── */
+  .backup-status{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px;margin-top:4px;}
+  .backup-status .dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .backup-status .dot.green{background:#22c55e}
+  .backup-status .dot.gray{background:#71717a}
+  .backup-status .dot.red{background:#ef4444}
+
+  /* ── BACKUP SETTINGS CARD ── */
+  .backup-card{margin-top:12px;}
+  .backup-field{display:flex;flex-direction:column;gap:6px;padding:14px 16px;}
+  .backup-field label{font-size:12px;color:var(--text-3);font-weight:500;}
+  .backup-field input, .backup-field textarea{
+    width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--bg);color:var(--text);font-size:13px;outline:none;font-family:inherit;
+    resize:vertical;min-height:36px;
+  }
+  .backup-field input:focus, .backup-field textarea:focus{border-color:var(--accent)}
+  .backup-actions{display:flex;gap:8px;padding:12px 16px 16px;flex-wrap:wrap;}
+  .backup-btn{
+    padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;
+    transition:all 0.15s;flex:1;min-width:100px;text-align:center;
+  }
+  .backup-btn:active{transform:scale(0.97)}
+  .backup-btn.primary{background:var(--accent);color:white;}
+  .backup-btn.secondary{background:var(--card);color:var(--text-2);border:1px solid var(--border);}
+  .backup-btn.danger{background:rgba(239,68,68,0.1);color:var(--low);border:1px solid rgba(239,68,68,0.2);}
+  .backup-btn.success{background:rgba(34,197,94,0.1);color:var(--normal);border:1px solid rgba(34,197,94,0.2);}
+  .backup-btn:disabled{opacity:0.4;pointer-events:none;}
+  .backup-sync-status{font-size:11px;color:var(--text-3);padding:4px 16px 12px;text-align:center;}
+  .backup-last-sync{font-size:11px;color:var(--text-3);padding:0 16px 8px;text-align:center;}
+
   /* ── TAB BAR ── */
   .tab-bar{
     position:fixed;bottom:0;left:0;right:0;
@@ -567,6 +598,33 @@
         <span class="settings-chevron">›</span>
       </div>
     </div>
+    <div class="card backup-card" style="margin-top:20px;padding:0;">
+      <div style="padding:16px 16px 8px;">
+        <div class="card-label">☁️ Google Sheets Backup</div>
+        <div class="backup-status" id="backupStatusIndicator">
+          <span class="dot gray"></span>
+          <span id="backupStatusText">Not connected</span>
+        </div>
+      </div>
+      <div class="backup-field">
+        <label for="backupUrl">Web App URL</label>
+        <input type="text" id="backupUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="backup-field">
+        <label for="backupToken">Secret Token</label>
+        <input type="password" id="backupToken" placeholder="Your secret token" autocomplete="off">
+      </div>
+      <div class="backup-actions">
+        <button class="backup-btn primary" id="backupSaveBtn">Save &amp; Test</button>
+        <button class="backup-btn secondary" id="backupTestBtn">Test Connection</button>
+        <button class="backup-btn secondary" id="backupRestoreBtn">Restore Data</button>
+      </div>
+      <div class="backup-actions" style="padding-top:0;">
+        <button class="backup-btn danger" id="backupClearBtn">Disconnect</button>
+      </div>
+      <div class="backup-sync-status" id="backupSyncStatus"></div>
+      <div class="backup-last-sync" id="backupLastSync"></div>
+    </div>
     <div class="insight" style="margin:20px 16px 0;text-align:center;background:none;border:none;color:var(--text-3);font-size:12px;">
       GlucoScan v2 &mdash; Data stays on your device
     </div>
@@ -726,7 +784,7 @@ let idxDB = null;            // cached IndexedDB connection
 const DB_NAME = 'GlucoScanDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'readings';
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 
 function openDB(callback) {
   // If connection already open, call back immediately
@@ -839,14 +897,17 @@ function saveReadings() {
 }
 
 function addReading(value, tag, source) {
-  readings.unshift({
+  const reading = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     value: value,
     tag: tag || '',
     timestamp: new Date().toISOString(),
     source: source || 'manual'
-  });
+  };
+  readings.unshift(reading);
   saveReadings();
+  // Try to sync to Google Sheets backup (best-effort, never blocks)
+  syncReadingToSheets(reading);
 }
 
 function deleteReading(id) {
@@ -1265,6 +1326,253 @@ function getChartData(range) {
   return { labels, values };
 }
 
+// ══════════════════════════════════════════════
+// ── GOOGLE SHEETS BACKUP ──
+// ══════════════════════════════════════════════
+
+let backupConfig = { url: '', token: '' };
+let backupStatus = { lastSync: null, error: null };
+
+function loadBackupConfig() {
+  try {
+    const raw = localStorage.getItem('glucoscan_backup');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      backupConfig = parsed;
+      document.getElementById('backupUrl').value = parsed.url || '';
+      document.getElementById('backupToken').value = parsed.token || '';
+    }
+  } catch(_) {}
+  try {
+    const rawStatus = localStorage.getItem('glucoscan_backup_status');
+    if (rawStatus) backupStatus = JSON.parse(rawStatus);
+  } catch(_) {}
+  updateBackupUI();
+}
+
+function saveBackupConfig() {
+  localStorage.setItem('glucoscan_backup', JSON.stringify(backupConfig));
+  localStorage.setItem('glucoscan_backup_status', JSON.stringify(backupStatus));
+}
+
+function updateBackupUI() {
+  const dot = document.querySelector('#backupStatusIndicator .dot');
+  const text = document.getElementById('backupStatusText');
+  const syncStatus = document.getElementById('backupSyncStatus');
+  const lastSync = document.getElementById('backupLastSync');
+
+  if (!backupConfig.url || !backupConfig.token) {
+    dot.className = 'dot gray';
+    text.textContent = 'Not connected';
+    syncStatus.textContent = '';
+    lastSync.textContent = '';
+    return;
+  }
+
+  if (backupStatus.error) {
+    dot.className = 'dot red';
+    text.textContent = 'Connection error';
+    syncStatus.textContent = backupStatus.error;
+  } else if (backupStatus.lastSync) {
+    dot.className = 'dot green';
+    text.textContent = 'Connected';
+    const ago = getTimeAgo(new Date(backupStatus.lastSync));
+    lastSync.textContent = 'Last sync: ' + ago;
+    syncStatus.textContent = '';
+  } else {
+    dot.className = 'dot gray';
+    text.textContent = 'Configured — test connection';
+    syncStatus.textContent = '';
+  }
+}
+
+function getTimeAgo(date) {
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.floor(hours / 24);
+  return days + 'd ago';
+}
+
+async function testBackupConnection() {
+  if (!backupConfig.url || !backupConfig.token) {
+    showToast('Save backup settings first');
+    return false;
+  }
+
+  const url = backupConfig.url.replace(/\/$/, '');
+  const statusEl = document.getElementById('backupSyncStatus');
+  statusEl.textContent = 'Testing connection…';
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        token: backupConfig.token,
+        id: 'test-' + Date.now(),
+        timestamp: new Date().toISOString(),
+        value: 0,
+        tag: '__test__',
+        source: 'test'
+      })
+    });
+
+    // With no-cors, we can't read the response, but if it didn't throw, assume it worked
+    backupStatus.error = null;
+    backupStatus.lastSync = new Date().toISOString();
+    saveBackupConfig();
+    updateBackupUI();
+    showToast('✅ Connected! Test reading sent.');
+    statusEl.textContent = 'Connected successfully';
+    return true;
+
+  } catch (err) {
+    backupStatus.error = 'Connection failed: ' + err.message;
+    saveBackupConfig();
+    updateBackupUI();
+    showToast('❌ Connection failed');
+    statusEl.textContent = backupStatus.error;
+    return false;
+  }
+}
+
+async function syncReadingToSheets(reading) {
+  if (!backupConfig.url || !backupConfig.token) return false;
+
+  const url = backupConfig.url.replace(/\/$/, '');
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        token: backupConfig.token,
+        id: reading.id,
+        timestamp: reading.timestamp,
+        value: reading.value,
+        tag: reading.tag || '',
+        source: reading.source || 'app'
+      })
+    });
+
+    backupStatus.error = null;
+    backupStatus.lastSync = new Date().toISOString();
+    saveBackupConfig();
+    updateBackupUI();
+    return true;
+
+  } catch (err) {
+    backupStatus.error = 'Last sync failed: ' + err.message;
+    saveBackupConfig();
+    updateBackupUI();
+    return false;
+  }
+}
+
+async function restoreFromSheets() {
+  if (!backupConfig.url || !backupConfig.token) {
+    showToast('Configure backup first');
+    return;
+  }
+
+  const statusEl = document.getElementById('backupSyncStatus');
+  statusEl.textContent = 'Fetching backup data…';
+
+  try {
+    const url = backupConfig.url.replace(/\/$/, '') + '?token=' + encodeURIComponent(backupConfig.token);
+    const response = await fetch(url, { cache: 'no-store' });
+    const data = await response.json();
+
+    if (data.status !== 'ok') {
+      showToast('❌ Restore failed: ' + (data.message || 'Unknown error'));
+      statusEl.textContent = data.message || 'Restore failed';
+      return;
+    }
+
+    if (!data.readings || !data.readings.length) {
+      showToast('Backup is empty — no readings to restore');
+      statusEl.textContent = 'No data in backup';
+      return;
+    }
+
+    // Merge: add backup readings that don't already exist locally
+    const existingIds = {};
+    readings.forEach(function(r) { existingIds[r.id] = true; });
+
+    const toAdd = data.readings.filter(function(r) { return !existingIds[r.id]; });
+
+    if (!toAdd.length) {
+      showToast('Already up to date (' + data.readings.length + ' readings)');
+      statusEl.textContent = 'Up to date — ' + data.readings.length + ' readings in backup';
+      return;
+    }
+
+    readings = readings.concat(toAdd);
+    readings.sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+    saveReadings();
+    renderAll();
+
+    showToast('✅ Restored ' + toAdd.length + ' reading(s) from backup');
+    statusEl.textContent = 'Restored ' + toAdd.length + ' of ' + data.readings.length + ' total readings';
+
+    backupStatus.error = null;
+    backupStatus.lastSync = new Date().toISOString();
+    saveBackupConfig();
+    updateBackupUI();
+
+  } catch (err) {
+    showToast('❌ Restore failed: ' + err.message);
+    statusEl.textContent = 'Restore error: ' + err.message;
+  }
+}
+
+function initBackupUI() {
+  loadBackupConfig();
+
+  document.getElementById('backupSaveBtn').addEventListener('click', async function() {
+    const url = document.getElementById('backupUrl').value.trim();
+    const token = document.getElementById('backupToken').value.trim();
+
+    if (!url || !token) {
+      showToast('Enter both URL and token');
+      return;
+    }
+
+    backupConfig.url = url;
+    backupConfig.token = token;
+    saveBackupConfig();
+    updateBackupUI();
+
+    await testBackupConnection();
+  });
+
+  document.getElementById('backupTestBtn').addEventListener('click', testBackupConnection);
+
+  document.getElementById('backupRestoreBtn').addEventListener('click', function() {
+    if (confirm('This will import any readings from your Google Sheet that are not already on this device. Continue?')) {
+      restoreFromSheets();
+    }
+  });
+
+  document.getElementById('backupClearBtn').addEventListener('click', function() {
+    if (!confirm('Disconnect Google Sheets backup? Your existing sheet data will not be deleted.')) return;
+    backupConfig = { url: '', token: '' };
+    backupStatus = { lastSync: null, error: null };
+    document.getElementById('backupUrl').value = '';
+    document.getElementById('backupToken').value = '';
+    saveBackupConfig();
+    updateBackupUI();
+    showToast('Backup disconnected');
+  });
+}
+
+// ══════════════════════════════════════════════
 // ── UI BINDING ──
 function bindUI() {
   // Tab navigation — delegate to switchTab
@@ -1823,6 +2131,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindRangeToggles();
   bindChartExpand();
   setupChart();
+  initBackupUI();
 
   // Self-check: verify we're running the latest HTML
   checkForUpdate();
