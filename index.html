@@ -368,10 +368,17 @@
 <div id="historyScreen" class="screen">
   <div class="history-header">
     <h2>History</h2>
-    <button class="export-btn" id="exportBtn">Export CSV</button>
+    <button class="export-btn" id="exportBtn">Export Excel</button>
   </div>
   <div class="scroll">
     <div id="historyList"></div>
+    <!-- Settings section at bottom of history -->
+    <div style="margin:32px 16px 16px;padding-top:16px;border-top:1px solid var(--border);">
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:12px;text-align:center;">App settings</div>
+      <button id="resetDataBtn" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.06);color:var(--low);font-size:13px;font-weight:600;transition:all 0.15s;">
+        Reset All Data
+      </button>
+    </div>
   </div>
 </div>
 
@@ -423,6 +430,27 @@
       <button class="confirm-save" id="saveConfirmedBtn">Save</button>
       <button class="confirm-discard" id="discardConfirmBtn">Discard</button>
     </div>
+  </div>
+</div>
+
+<!-- ════ RESET CONFIRM MODAL ════ -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal-sheet">
+    <div class="modal-title">
+      ⚠️ Reset All Data?
+      <button class="modal-close" id="closeResetBtn">✕</button>
+    </div>
+    <p style="font-size:14px;color:var(--text-3);line-height:1.6;margin-bottom:20px;">
+      This will permanently delete <strong>all your readings</strong> stored on this device.
+      This cannot be undone.
+    </p>
+    <button id="confirmResetBtn" style="width:100%;padding:14px;border-radius:12px;background:var(--low);color:white;font-size:15px;font-weight:600;transition:transform 0.15s;"
+      onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform='scale(1)'">
+      Yes, Delete Everything
+    </button>
+    <button id="cancelResetBtn" style="width:100%;padding:12px;margin-top:10px;border-radius:12px;background:var(--card);color:var(--text-2);font-size:14px;font-weight:500;border:1px solid var(--border);">
+      Cancel
+    </button>
   </div>
 </div>
 
@@ -822,7 +850,16 @@ function bindUI() {
   });
 
   // Export
-  document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  document.getElementById('exportBtn').addEventListener('click', exportExcel);
+
+  // Reset
+  document.getElementById('resetDataBtn').addEventListener('click', openReset);
+  document.getElementById('closeResetBtn').addEventListener('click', closeReset);
+  document.getElementById('cancelResetBtn').addEventListener('click', closeReset);
+  document.getElementById('confirmResetBtn').addEventListener('click', confirmReset);
+  document.getElementById('resetModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('resetModal')) closeReset();
+  });
 
   // Keyboard: Enter in manual input saves
   document.getElementById('manualInput').addEventListener('keydown', e => {
@@ -1036,25 +1073,80 @@ function renderTags(containerId) {
   });
 }
 
-// ── EXPORT CSV ──
-function exportCSV() {
+// ── EXPORT EXCEL ──
+function exportExcel() {
   if (!readings.length) {
     showToast('No data to export');
     return;
   }
-  const rows = ['ID,Value (mg/dL),Tag,Timestamp,Source'];
-  readings.forEach(r => {
-    rows.push(`${r.id},${r.value},"${(r.tag || '').replace(/"/g, '""')}",${new Date(r.timestamp).toISOString()},${r.source}`);
+
+  // Sort oldest first for the export
+  const sorted = [...readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  let rows = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8">
+    <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+      <x:Name>Glucose Readings</x:Name>
+      <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+    <style>
+      th { background: #0ea5e9; color: white; font-weight: 600; padding: 8px 12px; text-align: left; font-size: 12px; }
+      td { padding: 6px 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      .low { color: #ef4444; font-weight: 600; }
+      .normal { color: #22c55e; font-weight: 600; }
+      .high { color: #f59e0b; font-weight: 600; }
+      .very-high { color: #ef4444; font-weight: 600; }
+    </style>
+    </head><body>
+    <h2 style="font-family: sans-serif;">GlucoScan — Glucose Readings</h2>
+    <p style="font-family: sans-serif; color: #666; font-size: 13px;">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} &mdash; ${sorted.length} readings</p>
+    <br>
+    <table>
+    <tr><th>#</th><th>Date</th><th>Time</th><th>Value (mg/dL)</th><th>Range</th><th>Tag</th></tr>`;
+
+  sorted.forEach((r, i) => {
+    const d = new Date(r.timestamp);
+    const date = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    let cls = 'normal', range = 'Normal';
+    if (r.value < 70) { cls = 'low'; range = 'Low'; }
+    else if (r.value > 180) { cls = 'very-high'; range = 'High'; }
+    else if (r.value > 140) { cls = 'high'; range = 'Elevated'; }
+    rows += `<tr><td>${i + 1}</td><td style="white-space:nowrap">${date}</td><td style="white-space:nowrap">${time}</td><td class="${cls}">${r.value}</td><td class="${cls}">${range}</td><td>${r.tag || '—'}</td></tr>`;
   });
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+
+  rows += `</table><br><p style="font-family: sans-serif; color: #999; font-size: 11px;">Generated by GlucoScan — privacy-first glucose tracker</p></body></html>`;
+
+  const blob = new Blob([rows], { type: 'application/vnd.ms-excel' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `glucoscan_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `glucoscan_readings_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+
+  showToast('Exported ✓');
+}
+
+// ── RESET DATA ──
+function openReset() {
+  document.getElementById('resetModal').classList.add('open');
+}
+
+function closeReset() {
+  document.getElementById('resetModal').classList.remove('open');
+}
+
+function confirmReset() {
+  closeReset();
+  readings = [];
+  saveReadings();
+  renderAll();
+  showToast('All data cleared');
 }
 
 // ── TOAST ──
