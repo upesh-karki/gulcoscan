@@ -6,1426 +6,1078 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>GlucoScan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  
-  :root {
-    --bg: #0a0a0a;
-    --card: #161616;
-    --border: rgba(255,255,255,0.07);
-    --accent: #3b82f6;
-    --accent-dim: rgba(59,130,246,0.15);
-    --text: #f0f0f0;
-    --text-muted: #888;
-    --low: #ef4444;
-    --normal: #22c55e;
-    --high: #f59e0b;
-    --very-high: #ef4444;
-    --tab-h: 64px;
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0d0d0d;
+    --card:#18181b;
+    --card-hover:#1f1f23;
+    --border:rgba(255,255,255,0.07);
+    --accent:#0ea5e9;
+    --accent-dim:rgba(14,165,233,0.15);
+    --text:#f0f0f0;
+    --text-2:#a1a1aa;
+    --text-3:#71717a;
+    --low:#ef4444;
+    --normal:#22c55e;
+    --high:#f59e0b;
+    --very-high:#ef4444;
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+    --tab-h:60px;
+    --radius:14px;
+    --ease:cubic-bezier(0.25,0.46,0.45,0.94)
   }
-
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, 'Inter', system-ui, sans-serif;
-    overflow: hidden;
-  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;}
+  button{cursor:pointer;font-family:inherit;border:none;outline:none;background:none;color:inherit;}
 
   /* ── SCREENS ── */
-  .screen { position: fixed; inset: 0; display: none; flex-direction: column; overflow: hidden; }
-  .screen.active { display: flex; }
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden;opacity:0;transition:opacity 0.25s var(--ease);}
+  .screen.active{display:flex;opacity:1;}
+  .screen.slide-in{animation:slideIn 0.3s var(--ease);}
+  @keyframes slideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-  .scroll-area {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: calc(var(--tab-h) + var(--safe-bottom) + 80px);
-    -webkit-overflow-scrolling: touch;
+  .scroll{
+    flex:1;overflow-y:auto;overflow-x:hidden;
+    padding-bottom:calc(var(--tab-h) + var(--safe-bottom) + 24px);
+    -webkit-overflow-scrolling:touch;
+    scroll-behavior:smooth;
   }
+  .scroll::-webkit-scrollbar{width:3px}
+  .scroll::-webkit-scrollbar-thumb{background:var(--text-3);border-radius:3px}
 
   /* ── HEADER ── */
-  .app-header {
-    padding: 52px 20px 16px;
-    background: var(--bg);
-    flex-shrink: 0;
-  }
-  .app-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
-  .app-header p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .header{padding:56px 20px 8px;flex-shrink:0;animation:slideIn 0.3s var(--ease);}
+  .header h1{font-size:26px;font-weight:700;letter-spacing:-0.5px;display:flex;align-items:center;gap:8px;}
+  .header .sub{font-size:13px;color:var(--text-2);margin-top:2px;}
+  .header .greeting-text{font-size:15px;font-weight:400;color:var(--text-2);margin-top:1px;}
+  .header .greeting-text span{color:var(--text);font-weight:500;}
 
   /* ── CARDS ── */
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 18px;
-    margin: 0 16px 14px;
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px;margin:0 16px 12px;transition:border-color 0.2s,box-shadow 0.2s;
+    animation:cardIn 0.35s var(--ease) both;
   }
-  .card-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  @keyframes cardIn{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+  .card:nth-child(2){animation-delay:0.05s}
+  .card:nth-child(3){animation-delay:0.10s}
+  .card:nth-child(4){animation-delay:0.15s}
+  .card-label{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;}
 
   /* ── LATEST READING ── */
-  .latest-value {
-    font-size: 72px;
-    font-weight: 800;
-    letter-spacing: -3px;
-    line-height: 1;
+  .latest-value{font-size:72px;font-weight:800;letter-spacing:-3px;line-height:1;}
+  .latest-unit{font-size:18px;font-weight:400;color:var(--text-2);margin-left:4px;}
+  .status-badge{
+    display:inline-block;margin-top:10px;padding:4px 14px;border-radius:20px;
+    font-size:12px;font-weight:600;letter-spacing:0.3px;animation:badgePulse 2s ease-in-out infinite;
   }
-  .latest-unit { font-size: 18px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
-  .status-badge {
-    display: inline-block;
-    margin-top: 10px;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-  }
-  .badge-low    { background: rgba(239,68,68,0.18); color: var(--low); }
-  .badge-normal { background: rgba(34,197,94,0.18); color: var(--normal); }
-  .badge-high   { background: rgba(245,158,11,0.18); color: var(--high); }
-  .badge-veryhigh { background: rgba(239,68,68,0.18); color: var(--very-high); }
-
-  .no-data-hint { color: var(--text-muted); font-size: 15px; padding: 8px 0; }
+  @keyframes badgePulse{0%,100%{opacity:1}50%{opacity:0.7}}
+  .badge-low{background:rgba(239,68,68,0.18);color:var(--low)}
+  .badge-normal{background:rgba(34,197,94,0.18);color:var(--normal)}
+  .badge-high{background:rgba(245,158,11,0.18);color:var(--high)}
+  .badge-veryhigh{background:rgba(239,68,68,0.18);color:var(--very-high)}
+  .no-data{color:var(--text-3);font-size:15px;padding:12px 0;text-align:center;}
+  .latest-row{display:flex;align-items:flex-end;gap:12px;}
+  .latest-time{font-size:12px;color:var(--text-3);margin-top:4px;}
 
   /* ── STATS ROW ── */
-  .stats-row { display: flex; gap: 10px; margin: 0 16px 14px; }
-  .stat-chip {
-    flex: 1;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 8px;
-    text-align: center;
+  .stats{display:flex;gap:10px;margin:0 16px 14px;}
+  .stat{
+    flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;
+    padding:12px 8px;text-align:center;transition:background 0.2s;
+    animation:cardIn 0.35s var(--ease) both;animation-delay:0.08s;
   }
-  .stat-chip .val { font-size: 20px; font-weight: 700; }
-  .stat-chip .lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat .val{font-size:22px;font-weight:700;}
+  .stat .lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:0.5px;}
 
   /* ── CHART ── */
-  .chart-toggles { display: flex; gap: 6px; margin-bottom: 14px; }
-  .toggle-btn {
-    padding: 5px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
+  .chart-toggles{display:flex;gap:6px;margin-bottom:12px;}
+  .toggle-btn{
+    padding:5px 14px;border-radius:20px;border:1px solid var(--border);
+    background:transparent;color:var(--text-3);font-size:12px;font-weight:600;
+    transition:all 0.15s;
   }
-  .toggle-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  #trendCanvas { width: 100%; border-radius: 8px; display: block; }
+  .toggle-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+  .toggle-btn:hover{border-color:var(--text-3)}
+  #trendChart{width:100%;border-radius:8px;display:block;}
+
+  /* ── INSIGHT ── */
+  .insight{
+    margin:0 16px 12px;padding:12px 16px;border-radius:12px;
+    background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.15);
+    font-size:13px;color:var(--text-2);line-height:1.4;
+    animation:cardIn 0.35s var(--ease) both;animation-delay:0.12s;
+  }
+  .insight .icon{font-size:16px;margin-right:6px;}
 
   /* ── TAB BAR ── */
-  .tab-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: calc(var(--tab-h) + var(--safe-bottom));
-    background: rgba(10,10,10,0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid var(--border);
-    display: flex;
-    z-index: 100;
-    padding-bottom: var(--safe-bottom);
+  .tab-bar{
+    position:fixed;bottom:0;left:0;right:0;
+    height:calc(var(--tab-h) + var(--safe-bottom));
+    background:rgba(13,13,13,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border-top:1px solid var(--border);display:flex;z-index:100;
+    padding-bottom:var(--safe-bottom);
   }
-  .tab-btn {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 0.15s;
+  .tab-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    background:none;border:none;color:var(--text-3);font-size:10px;font-weight:500;
+    transition:color 0.15s;position:relative;
   }
-  .tab-btn .tab-icon { font-size: 22px; }
-  .tab-btn.active { color: var(--accent); }
+  .tab-btn .tab-icon{font-size:22px;transition:transform 0.2s var(--ease);}
+  .tab-btn.active{color:var(--accent)}
+  .tab-btn.active .tab-icon{transform:scale(1.1)}
+  .tab-btn:active .tab-icon{transform:scale(0.9)}
 
   /* ── FAB ── */
-  #fabScan {
-    position: fixed;
-    bottom: calc(var(--tab-h) + var(--safe-bottom) + 14px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: 64px; height: 64px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: none;
-    color: white;
-    font-size: 26px;
-    cursor: pointer;
-    z-index: 200;
-    box-shadow: 0 4px 24px rgba(59,130,246,0.5);
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.15s, box-shadow 0.15s;
+  #fabScan{
+    position:fixed;
+    bottom:calc(var(--tab-h) + var(--safe-bottom) + 16px);
+    left:50%;transform:translateX(-50%);
+    width:60px;height:60px;border-radius:50%;
+    background:var(--accent);border:none;color:white;
+    font-size:24px;z-index:200;
+    box-shadow:0 4px 20px rgba(14,165,233,0.45);
+    display:flex;align-items:center;justify-content:center;
+    transition:transform 0.15s,box-shadow 0.15s;
+    animation:fabFloat 3s ease-in-out infinite;
   }
-  #fabScan:active { transform: translateX(-50%) scale(0.93); box-shadow: 0 2px 12px rgba(59,130,246,0.4); }
+  @keyframes fabFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-4px)}}
+  #fabScan:active{transform:translateX(-50%) scale(0.9);box-shadow:0 2px 12px rgba(14,165,233,0.3);}
 
   /* ── HISTORY ── */
-  .history-header {
-    padding: 52px 20px 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
+  .history-header{
+    padding:56px 20px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+    animation:slideIn 0.3s var(--ease);
   }
-  .history-header h2 { font-size: 22px; font-weight: 700; }
-  .export-btn {
-    padding: 7px 16px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
+  .history-header h2{font-size:22px;font-weight:700}
+  .export-btn{
+    font-size:12px;color:var(--accent);font-weight:600;padding:6px 14px;
+    border:1px solid rgba(14,165,233,0.3);border-radius:8px;transition:background 0.15s;
   }
-  .day-group { padding: 0 16px; margin-bottom: 6px; }
-  .day-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; padding: 10px 0 6px; }
-  .reading-row {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 6px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .reading-row:active { background: rgba(255,255,255,0.05); }
-  .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .row-value { font-size: 18px; font-weight: 700; min-width: 52px; }
-  .row-tag { font-size: 12px; color: var(--text-muted); flex: 1; }
-  .row-time { font-size: 12px; color: var(--text-muted); }
-  .empty-history { text-align: center; color: var(--text-muted); padding: 60px 20px; font-size: 15px; }
+  .export-btn:hover{background:var(--accent-dim)}
 
-  /* ── MODAL OVERLAY ── */
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: 300;
-    display: none;
-    align-items: flex-end;
-    justify-content: center;
+  .history-group{margin:0 16px 12px;}
+  .history-date{font-size:12px;font-weight:600;color:var(--text-3);padding:12px 4px 6px;letter-spacing:0.3px;text-transform:uppercase;}
+  .history-item{
+    display:flex;align-items:center;gap:12px;padding:12px 12px;
+    border-bottom:1px solid var(--border);transition:background 0.15s;border-radius:6px;
+    animation:cardIn 0.25s var(--ease) both;
   }
-  .modal-overlay.open { display: flex; }
-  .modal-sheet {
-    background: #1a1a1a;
-    border-radius: 24px 24px 0 0;
-    padding: 24px 24px calc(24px + var(--safe-bottom));
-    width: 100%;
-    max-width: 480px;
-    animation: slideUp 0.25s ease;
+  .history-item:hover{background:var(--card-hover)}
+  .history-val{font-size:20px;font-weight:700;min-width:52px;}
+  .history-val .unit{font-size:10px;font-weight:500;color:var(--text-3);margin-left:2px;}
+  .history-val.low{color:var(--low)}
+  .history-val.normal{color:var(--normal)}
+  .history-val.high{color:var(--high)}
+  .history-meta{flex:1;}
+  .history-time{font-size:12px;color:var(--text-3);}
+  .history-tag{font-size:10px;color:var(--accent);background:var(--accent-dim);display:inline-block;padding:2px 8px;border-radius:10px;margin-top:2px;}
+  .history-delete{
+    width:28px;height:28px;border-radius:50%;font-size:14px;color:var(--text-3);
+    display:flex;align-items:center;justify-content:center;transition:all 0.15s;
+    opacity:0.4;
   }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
-  .modal-close {
-    float: right;
-    background: rgba(255,255,255,0.08);
-    border: none; color: var(--text);
-    width: 30px; height: 30px;
-    border-radius: 50%;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-  }
+  .history-item:hover .history-delete{opacity:1}
+  .history-delete:hover{background:rgba(239,68,68,0.15);color:var(--low)}
+  .empty-state{padding:48px 16px;text-align:center;color:var(--text-3);}
 
-  /* ── CAMERA SCREEN ── */
-  #cameraScreen {
-    background: #000;
-    z-index: 400;
+  /* ── CAMERA / SCAN ── */
+  #scanScreen{background:var(--bg);}
+  .scan-header{padding:56px 20px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .scan-header h2{font-size:22px;font-weight:700;}
+  .close-btn{width:36px;height:36px;border-radius:50%;background:var(--card);font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text-2);border:1px solid var(--border);}
+  .scan-grid{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;padding:20px;
   }
-  #cameraScreen .cam-header {
-    position: absolute; top: 0; left: 0; right: 0;
-    padding: 50px 20px 16px;
-    display: flex; align-items: center; gap: 14px;
-    z-index: 10;
+  .scan-big-icon{font-size:72px;animation:scanPulse 2s ease-in-out infinite;}
+  @keyframes scanPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(0.95)}}
+  .scan-title{font-size:20px;font-weight:700;}
+  .scan-sub{font-size:14px;color:var(--text-3);text-align:center;max-width:280px;line-height:1.5;}
+  .scan-btn{
+    padding:14px 40px;border-radius:12px;background:var(--accent);color:white;
+    font-size:16px;font-weight:600;transition:transform 0.15s,box-shadow 0.15s;
+    box-shadow:0 4px 16px rgba(14,165,233,0.3);
   }
-  .back-btn {
-    background: rgba(255,255,255,0.12);
-    border: none; color: white;
-    width: 38px; height: 38px;
-    border-radius: 50%;
-    font-size: 18px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+  .scan-btn:active{transform:scale(0.96)}
+  .manual-link{font-size:13px;color:var(--text-3);padding:8px;border-bottom:1px dashed var(--border);}
+
+  /* ── CAMERA VIEW ── */
+  .cam-container{flex:1;position:relative;overflow:hidden;background:#000;}
+  #video{width:100%;height:100%;object-fit:cover;}
+  .cam-guide{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:75%;padding-bottom:25%;border:2px dashed rgba(255,255,255,0.4);
+    border-radius:12px;pointer-events:none;animation:guidePulse 2s ease-in-out infinite;
   }
-  .cam-title { color: white; font-size: 17px; font-weight: 600; }
-  #videoEl {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
+  @keyframes guidePulse{0%,100%{border-color:rgba(255,255,255,0.3)}50%{border-color:rgba(255,255,255,0.6)}}
+  .cam-hint{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:13px;color:rgba(255,255,255,0.6);}
+  .cam-actions{display:flex;gap:16px;justify-content:center;padding:16px 0;position:absolute;bottom:60px;left:0;right:0;}
+  .cam-capture-btn{
+    width:72px;height:72px;border-radius:50%;background:white;border:4px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:0;
+    transition:transform 0.15s;box-shadow:0 0 0 6px rgba(255,255,255,0.15);
   }
-  .cam-overlay {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    z-index: 5; pointer-events: none;
+  .cam-capture-btn:active{transform:scale(0.92)}
+  .cam-capture-btn::after{content:'';width:56px;height:56px;border-radius:50%;background:white;}
+  .cam-switch-btn{
+    position:absolute;top:70px;right:16px;width:40px;height:40px;border-radius:50%;
+    background:rgba(0,0,0,0.5);color:white;font-size:18px;border:1px solid rgba(255,255,255,0.15);
   }
-  .guide-box {
-    width: 75vw; max-width: 300px;
-    aspect-ratio: 2.5 / 1;
-    border: 2px solid rgba(255,255,255,0.8);
-    border-radius: 10px;
-    position: relative;
+  .cam-close-btn{
+    position:absolute;top:70px;left:16px;width:40px;height:40px;border-radius:50%;
+    background:rgba(0,0,0,0.5);color:white;font-size:18px;border:1px solid rgba(255,255,255,0.15);
   }
-  .guide-box::before {
-    content: 'Line up meter display';
-    position: absolute; top: -28px; left: 0; right: 0;
-    text-align: center; color: white; font-size: 13px;
-    font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  #captureCanvas{display:none;}
+
+  /* ── PROCESSING ── */
+  .processing-overlay{
+    position:absolute;inset:0;background:rgba(0,0,0,0.85);
+    display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;
+    gap:16px;
   }
-  /* Corner accents */
-  .guide-box::after {
-    content: '';
-    position: absolute; inset: -2px;
-    border-radius: 10px;
-    box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
-  }
-  .cam-bottom {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 24px 24px calc(24px + var(--safe-bottom));
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    z-index: 10;
-  }
-  #captureBtn {
-    width: 70px; height: 70px; border-radius: 50%;
-    background: white; border: 4px solid rgba(255,255,255,0.4);
-    cursor: pointer; transition: transform 0.12s;
-  }
-  #captureBtn:active { transform: scale(0.9); }
-  .cam-hint { color: rgba(255,255,255,0.6); font-size: 12px; }
-  .manual-fallback {
-    color: var(--accent); font-size: 14px; font-weight: 500;
-    background: none; border: none; cursor: pointer; padding: 4px 8px;
-  }
-  #processingOverlay {
-    position: absolute; inset: 0; background: rgba(0,0,0,0.75);
-    display: none; flex-direction: column;
-    align-items: center; justify-content: center; gap: 16px; z-index: 20;
-  }
-  #processingOverlay.show { display: flex; }
-  .spinner {
-    width: 40px; height: 40px; border-radius: 50%;
-    border: 3px solid rgba(255,255,255,0.2);
-    border-top-color: var(--accent);
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .proc-text { color: white; font-size: 14px; }
+  .processing-overlay.show{display:flex;}
+  .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .proc-text{font-size:14px;color:rgba(255,255,255,0.7);}
 
   /* ── CONFIRM SCREEN ── */
-  #confirmScreen { z-index: 500; background: var(--bg); }
-  #confirmScreen .confirm-header {
-    padding: 52px 20px 16px;
-    display: flex; align-items: center; gap: 14px;
-    flex-shrink: 0;
-  }
-  .confirm-body { padding: 0 20px; flex: 1; overflow-y: auto; }
-  .confirm-found {
-    text-align: center; padding: 30px 0 24px;
-  }
-  .confirm-found .big-num {
-    font-size: 80px; font-weight: 800; letter-spacing: -3px;
-    line-height: 1;
-  }
-  .confirm-found .unit-label { font-size: 20px; color: var(--text-muted); }
-  .confirm-label { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
-  .tags-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-  .tag-pill {
-    padding: 8px 16px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    color: var(--text-muted);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .tag-pill.selected { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  .save-btn {
-    width: 100%; padding: 16px;
-    background: var(--accent); border: none;
-    color: white; font-size: 16px; font-weight: 700;
-    border-radius: 14px; cursor: pointer;
-    transition: opacity 0.15s;
-    margin-bottom: 12px;
-  }
-  .save-btn:active { opacity: 0.85; }
-  .rescan-btn {
-    width: 100%; padding: 14px;
-    background: var(--card); border: 1px solid var(--border);
-    color: var(--text-muted); font-size: 14px; font-weight: 600;
-    border-radius: 14px; cursor: pointer;
-    margin-bottom: calc(var(--tab-h) + var(--safe-bottom) + 20px);
-  }
+  #confirmScreen{background:var(--bg);z-index:50;}
+  .confirm-big{font-size:96px;font-weight:800;text-align:center;letter-spacing:-4px;padding:40px 0 8px;animation:scaleIn 0.35s var(--ease);}
+  @keyframes scaleIn{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
+  .confirm-label{text-align:center;font-size:14px;color:var(--text-3);margin-bottom:20px;}
+  .confirm-actions{display:flex;gap:12px;padding:0 20px;}
+  .confirm-actions button{flex:1;padding:14px;border-radius:12px;font-size:15px;font-weight:600;transition:transform 0.15s;}
+  .confirm-actions button:active{transform:scale(0.96)}
+  .confirm-save{background:var(--accent);color:white;}
+  .confirm-discard{background:var(--card);color:var(--text-2);border:1px solid var(--border);}
 
-  /* ── MANUAL ENTRY ── */
-  .manual-input-wrap { position: relative; margin-bottom: 20px; }
-  .manual-input {
-    width: 100%; padding: 16px 60px 16px 18px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; color: var(--text); font-size: 28px;
-    font-weight: 700; outline: none; text-align: center;
-    -webkit-appearance: none;
+  /* ── TAG GRID ── */
+  .tag-grid{display:flex;flex-wrap:wrap;gap:8px;padding:16px 20px;}
+  .tag-pill{
+    padding:8px 18px;border-radius:20px;border:1px solid var(--border);
+    background:var(--card);color:var(--text-2);font-size:13px;font-weight:500;
+    transition:all 0.15s;
   }
-  .manual-input:focus { border-color: var(--accent); }
-  .manual-unit { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 14px; }
+  .tag-pill.selected{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+  .tag-pill:active{transform:scale(0.95)}
 
-  /* ── DELETE CONFIRM ── */
-  .delete-actions { display: flex; gap: 10px; margin-top: 10px; }
-  .del-cancel { flex:1; padding: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; }
-  .del-confirm { flex:1; padding: 14px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; color: var(--low); font-size: 14px; font-weight: 600; cursor: pointer; }
-
-  /* ── TOAST ── */
-  #toast {
-    position: fixed; bottom: calc(var(--tab-h) + var(--safe-bottom) + 20px);
-    left: 50%; transform: translateX(-50%) translateY(20px);
-    background: #333; color: white; padding: 10px 20px;
-    border-radius: 20px; font-size: 13px; font-weight: 500;
-    opacity: 0; transition: all 0.3s; z-index: 999; white-space: nowrap;
-    pointer-events: none;
+  /* ── MANUAL MODAL ── */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.6);
+    z-index:200;display:none;align-items:flex-end;justify-content:center;
+    backdrop-filter:blur(4px);
   }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .modal-overlay.open{display:flex;}
+  .modal-sheet{
+    background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;
+    padding:24px 20px calc(24px + var(--safe-bottom));
+    animation:sheetUp 0.3s var(--ease);
+  }
+  @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .modal-title{font-size:18px;font-weight:700;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;}
+  .modal-close{width:28px;height:28px;border-radius:50%;background:var(--border);font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--text-2);}
+  .manual-input{
+    width:100%;padding:16px;border-radius:12px;border:1px solid var(--border);
+    background:var(--bg);color:var(--text);font-size:28px;font-weight:700;text-align:center;
+    outline:none;transition:border-color 0.15s;
+  }
+  .manual-input:focus{border-color:var(--accent)}
+  .manual-unit{text-align:center;font-size:12px;color:var(--text-3);margin-top:4px;}
+  .manual-save{
+    width:100%;padding:14px;border-radius:12px;background:var(--accent);color:white;
+    font-size:15px;font-weight:600;margin-top:16px;transition:transform 0.15s;
+  }
+  .manual-save:active{transform:scale(0.98)}
+
+  /* ── SUCCESS TOAST ── */
+  .toast{
+    position:fixed;bottom:calc(var(--tab-h) + var(--safe-bottom) + 80px);
+    left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--card);color:var(--text);padding:10px 24px;border-radius:12px;
+    border:1px solid var(--border);font-size:14px;font-weight:500;
+    opacity:0;transition:all 0.3s var(--ease);z-index:300;pointer-events:none;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ── SUCCESS OVERLAY ── */
+  .success-overlay{
+    position:fixed;inset:0;background:rgba(14,165,233,0.12);backdrop-filter:blur(8px);
+    z-index:250;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;
+  }
+  .success-overlay.show{display:flex;}
+  .success-overlay .big{font-size:64px;}
+  .success-overlay .text{font-size:22px;font-weight:700;}
+  .success-overlay .sub{font-size:14px;color:var(--text-3);}
+
+  /* ── RESPONSIVE ── */
+  @media(min-width:480px){
+    .card,.stats,.insight,.history-group{margin-left:auto;margin-right:auto;max-width:440px;}
+    .header,.history-header{padding-left:calc((100% - 440px)/2);padding-right:calc((100% - 440px)/2);}
+    .modal-sheet{max-width:400px;margin:0 auto;border-radius:20px 20px 0 0;}
+  }
 </style>
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════
-     HOME SCREEN
-════════════════════════════════════════════ -->
+<!-- ════ HOME ════ -->
 <div id="homeScreen" class="screen active">
-  <div class="app-header greeting">
-    <h1>GlucoScan</h1>
-    <p>Track glucose in seconds</p>
+  <div class="header">
+    <div class="greeting-text"><span id="greetingMsg">Good morning</span></div>
+    <h1>GlucoScan <span style="font-size:20px;color:var(--text-3);font-weight:400;">🩸</span></h1>
+    <div class="sub">Blood glucose tracker</div>
   </div>
-  <div class="scroll-area">
+  <div class="scroll">
     <!-- Latest reading -->
-    <div class="card" id="latestCard">
+    <div class="card">
       <div class="card-label">Latest Reading</div>
-      <div id="latestDisplay" class="no-data-hint">No readings yet — tap 📷 to scan</div>
+      <div id="latestDisplay">
+        <div class="no-data">No readings yet — tap 📷 to scan</div>
+      </div>
     </div>
-
     <!-- Stats row -->
-    <div class="stats-row">
-      <div class="stat-chip"><div class="val" id="avg7">—</div><div class="lbl">7-Day Avg</div></div>
-      <div class="stat-chip"><div class="val" id="avg30">—</div><div class="lbl">30-Day Avg</div></div>
-      <div class="stat-chip"><div class="val" id="inRange">—</div><div class="lbl">% In Range</div></div>
+    <div class="stats">
+      <div class="stat"><div class="val" id="statAvg7">--</div><div class="lbl">7-day avg</div></div>
+      <div class="stat"><div class="val" id="statAvg30">--</div><div class="lbl">30-day avg</div></div>
+      <div class="stat"><div class="val" id="statInRange">--%</div><div class="lbl">in range</div></div>
     </div>
-
     <!-- Trend chart -->
     <div class="card">
       <div class="card-label">Trend</div>
-      <div class="chart-toggles">
-        <button class="toggle-btn active" data-days="10">10D</button>
-        <button class="toggle-btn" data-days="30">30D</button>
-        <button class="toggle-btn" data-days="365">1Y</button>
+      <div class="chart-toggles" id="rangeToggle">
+        <button class="toggle-btn active" data-range="7">7d</button>
+        <button class="toggle-btn" data-range="14">14d</button>
+        <button class="toggle-btn" data-range="30">30d</button>
+        <button class="toggle-btn" data-range="90">90d</button>
       </div>
-      <canvas id="trendCanvas" height="160"></canvas>
+      <canvas id="trendChart" height="160"></canvas>
+    </div>
+    <!-- Insight -->
+    <div class="insight" id="insightBox">
+      <span class="icon">💡</span>
+      <span id="insightText">Your levels are stable. Keep it up!</span>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     HISTORY SCREEN
-════════════════════════════════════════════ -->
+<!-- ════ HISTORY ════ -->
 <div id="historyScreen" class="screen">
   <div class="history-header">
     <h2>History</h2>
-    <button class="export-btn" id="exportBtn">⬇ Export CSV</button>
+    <button class="export-btn" id="exportBtn">Export CSV</button>
   </div>
-  <div class="scroll-area" id="historyList"></div>
-</div>
-
-<!-- ════════════════════════════════════════════
-     CAMERA SCREEN
-════════════════════════════════════════════ -->
-<div id="cameraScreen" class="screen">
-  <div class="cam-header">
-    <button class="back-btn" id="closeCameraBtn">✕</button>
-    <span class="cam-title">Scan Glucose Meter</span>
-  </div>
-  <video id="videoEl" autoplay playsinline muted></video>
-  <div class="cam-overlay">
-    <div class="guide-box"></div>
-  </div>
-  <div class="cam-bottom">
-    <div class="cam-hint">Point camera at meter display</div>
-    <button id="captureBtn"></button>
-    <button class="manual-fallback" id="manualFallbackBtn">Enter manually instead</button>
-  </div>
-  <div id="processingOverlay">
-    <div class="spinner"></div>
-    <div class="proc-text" id="procText">Scanning...</div>
+  <div class="scroll">
+    <div id="historyList"></div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     CONFIRM SCREEN
-════════════════════════════════════════════ -->
-<div id="confirmScreen" class="screen">
-  <div class="confirm-header">
-    <button class="back-btn" id="closeConfirmBtn">✕</button>
-    <span class="cam-title" id="confirmTitle">Confirm Reading</span>
+<!-- ════ SCAN ════ -->
+<div id="scanScreen" class="screen">
+  <div class="scan-header">
+    <h2>Scan</h2>
+    <button class="close-btn" id="closeScanBtn">✕</button>
   </div>
-  <div class="confirm-body">
-    <div class="confirm-found">
-      <div class="big-num" id="confirmNum">—</div>
-      <div class="unit-label">mg/dL</div>
+  <div class="scan-grid">
+    <div class="scan-big-icon">📷</div>
+    <div class="scan-title">Scan your glucose meter</div>
+    <div class="scan-sub">Point your camera at the display to auto-detect your reading</div>
+    <button class="scan-btn" id="startScanBtn">Open Camera</button>
+    <button class="manual-link" id="manualEntryBtn">Enter manually instead</button>
+  </div>
+</div>
+
+<!-- ════ CAMERA VIEW ════ -->
+<div id="cameraScreen" class="screen" style="background:#000;z-index:40;">
+  <div class="cam-container">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="cam-guide"></div>
+    <canvas id="captureCanvas"></canvas>
+    <div class="processing-overlay" id="processingOverlay">
+      <div class="spinner"></div>
+      <div class="proc-text" id="procText">Processing…</div>
     </div>
-    <div class="confirm-label">Select tag (optional)</div>
-    <div class="tags-grid" id="confirmTags"></div>
-    <button class="save-btn" id="saveConfirmedBtn">Save Reading</button>
-    <button class="rescan-btn" id="discardConfirmBtn">Discard</button>
+    <div class="cam-hint">Align meter display inside the rectangle</div>
+    <div class="cam-actions">
+      <button class="cam-capture-btn" id="captureBtn" aria-label="Capture"></button>
+    </div>
+    <button class="cam-switch-btn" id="switchCam">🔄</button>
+    <button class="cam-close-btn" id="closeCameraBtn">✕</button>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     MANUAL ENTRY MODAL
-════════════════════════════════════════════ -->
+<!-- ════ CONFIRM ════ -->
+<div id="confirmScreen" class="screen">
+  <div class="header">
+    <div class="sub">Detected reading</div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 20px;">
+    <div class="confirm-big" id="confirmNum">--</div>
+    <div class="confirm-label" id="confirmLabel">mg/dL</div>
+    <div style="padding:0 0 8px 20px;font-size:13px;color:var(--text-3);font-weight:500;">Tag (optional)</div>
+    <div class="tag-grid" id="confirmTags"></div>
+    <div class="confirm-actions">
+      <button class="confirm-save" id="saveConfirmedBtn">Save</button>
+      <button class="confirm-discard" id="discardConfirmBtn">Discard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MANUAL MODAL ════ -->
 <div class="modal-overlay" id="manualModal">
   <div class="modal-sheet">
-    <div class="modal-title">Manual Entry <button class="modal-close" id="closeManualBtn">✕</button></div>
-    <div class="manual-input-wrap">
-      <input type="number" class="manual-input" id="manualInput" placeholder="0" min="20" max="600" inputmode="numeric">
-      <span class="manual-unit">mg/dL</span>
+    <div class="modal-title">
+      Manual Entry
+      <button class="modal-close" id="closeManualBtn">✕</button>
     </div>
-    <div class="confirm-label">Tag (optional)</div>
-    <div class="tags-grid" id="manualTags"></div>
-    <button class="save-btn" id="manualSaveBtn">Save Reading</button>
+    <input type="number" class="manual-input" id="manualInput" placeholder="0" min="20" max="600" inputmode="numeric">
+    <div class="manual-unit">mg/dL</div>
+    <div style="padding:12px 0 0;font-size:13px;color:var(--text-3);font-weight:500;">Tag (optional)</div>
+    <div class="tag-grid" id="manualTags"></div>
+    <button class="manual-save" id="manualSaveBtn">Save Reading</button>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     DELETE CONFIRM MODAL
-════════════════════════════════════════════ -->
-<div class="modal-overlay" id="deleteModal">
-  <div class="modal-sheet">
-    <div class="modal-title">Delete Reading?</div>
-    <div style="color:var(--text-muted);font-size:14px;" id="deleteDesc"></div>
-    <div class="delete-actions">
-      <button class="del-cancel" id="cancelDeleteBtn">Cancel</button>
-      <button class="del-confirm" id="confirmDeleteBtn">Delete</button>
-    </div>
-  </div>
+<!-- ════ SUCCESS OVERLAY ════ -->
+<div class="success-overlay" id="successOverlay">
+  <div class="big">✅</div>
+  <div class="text" id="successText">Logged!</div>
+  <div class="sub">Reading saved to device</div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     TAB BAR + FAB
-════════════════════════════════════════════ -->
-<div class="tab-bar">
-  <button class="tab-btn active" id="tabHome" data-tab="home">
-    <span class="tab-icon">🏠</span>Home
-  </button>
-  <button class="tab-btn" id="tabHistory" data-tab="history">
-    <span class="tab-icon">📋</span>History
-  </button>
-</div>
+<!-- ════ TOAST ════ -->
+<div class="toast" id="toast"></div>
+
+<!-- ════ FAB ════ -->
 <button id="fabScan">📷</button>
 
-<div id="toast"></div>
-
-<!-- hidden canvas for OCR capture -->
-<canvas id="captureCanvas" style="display:none"></canvas>
-
 <script>
-'use strict';
-document.addEventListener('DOMContentLoaded', () => {
-  const STORAGE_KEY = 'glucoscan_readings';
-  const TAGS = ['Before meal', 'After meal', 'Fasting', 'Bedtime', 'Random'];
-  let readings = [];
-  let videoStream = null;
-  let currentTag = '';
-  let pendingValue = null;
-  let pendingSource = 'manual';
-  let pendingDeleteId = null;
-  let currentRange = 10;
-  let toastTimer = null;
+const STORAGE_KEY = 'glucoscan_readings';
+const TAGS = ['Before meal', 'After meal', 'Fasting', 'Bedtime', 'Random'];
 
-  // ── INIT ──────────────────────────────────────────────────────
-  loadReadings();
-  updateGreeting();
-  setupNav();
-  setupChart();
-  setupScan();
-  setupManual();
-  setupHistory();
-  setupDelete();
-  renderAll();
+let readings = [];
+let chartInstance = null;
+let stream = null;
+let currentTag = '';
+let facing = 'environment';
 
-  // ── DATA ──────────────────────────────────────────────────────
-  function loadReadings() {
+// ── INIT (called after DOM loaded below) ──
+
+// ── DATA ──
+function loadReadings() {
+  try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       readings = JSON.parse(raw);
-    } else {
-      readings = generateSamples();
-      saveReadings();
     }
-    readings.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (e) {}
+  if (!Array.isArray(readings) || !readings.length) {
+    readings = [];
   }
+  readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
 
-  function saveReadings() {
+function saveReadings() {
+  try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
+  } catch (e) {
+    showToast('Could not save — storage full?');
+  }
+}
+
+function addReading(value, tag, source) {
+  readings.unshift({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    value: value,
+    tag: tag || '',
+    timestamp: new Date().toISOString(),
+    source: source || 'manual'
+  });
+  saveReadings();
+}
+
+function deleteReading(id) {
+  readings = readings.filter(r => r.id !== id);
+  saveReadings();
+}
+
+// ── CLASSIFICATION ──
+function classify(v) {
+  if (v < 70) return { label: 'Low', css: 'badge-low', color: '#ef4444' };
+  if (v <= 140) return { label: 'Normal', css: 'badge-normal', color: '#22c55e' };
+  if (v <= 180) return { label: 'Elevated', css: 'badge-high', color: '#f59e0b' };
+  return { label: 'High', css: 'badge-veryhigh', color: '#ef4444' };
+}
+
+// ── GREETING ──
+function updateGreeting() {
+  const h = new Date().getHours();
+  let g = 'Good evening';
+  if (h < 12) g = 'Good morning';
+  else if (h < 17) g = 'Good afternoon';
+  document.getElementById('greetingMsg').textContent = g;
+}
+
+// ── RENDER ──
+function renderAll() {
+  renderHome();
+  renderHistory();
+}
+
+function renderHome() {
+  const latestDisplay = document.getElementById('latestDisplay');
+
+  if (!readings.length) {
+    latestDisplay.innerHTML = '<div class="no-data">No readings yet — tap 📷 to scan</div>';
+    document.getElementById('statAvg7').textContent = '--';
+    document.getElementById('statAvg30').textContent = '--';
+    document.getElementById('statInRange').textContent = '--%';
+    document.getElementById('insightText').textContent = 'Start tracking to see insights here.';
+    return;
   }
 
-  function addReading(value, tag, source) {
-    readings.unshift({
-      id: Math.random().toString(36).slice(2) + Date.now(),
-      value,
-      tag: tag || '',
-      timestamp: Date.now(),
-      source: source || 'manual'
+  const r = readings[0];
+  const s = classify(r.value);
+  const time = new Date(r.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+
+  latestDisplay.innerHTML = `
+    <div class="latest-row">
+      <div class="latest-value" style="color:${s.color}">${r.value}<span class="latest-unit">mg/dL</span></div>
+      <div class="status-badge ${s.css}">${s.label}</div>
+    </div>
+    <div class="latest-time">${time}</div>
+  `;
+
+  // Stats
+  const now = Date.now();
+  const d7 = readings.filter(r => now - new Date(r.timestamp).getTime() <= 7 * 86400000).map(r => r.value);
+  const d30 = readings.filter(r => now - new Date(r.timestamp).getTime() <= 30 * 86400000).map(r => r.value);
+  document.getElementById('statAvg7').textContent = d7.length ? Math.round(d7.reduce((a, b) => a + b, 0) / d7.length) : '--';
+  document.getElementById('statAvg30').textContent = d30.length ? Math.round(d30.reduce((a, b) => a + b, 0) / d30.length) : '--';
+  const inRange = d30.filter(v => v >= 70 && v <= 180).length;
+  document.getElementById('statInRange').textContent = d30.length ? Math.round(inRange / d30.length * 100) + '%' : '--%';
+
+  setupChart();
+  updateInsight();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (!readings.length) {
+    list.innerHTML = '<div class="empty-state">No readings yet.<br>Tap 📷 to scan your first reading.</div>';
+    return;
+  }
+
+  const groups = {};
+  readings.forEach(r => {
+    const k = new Date(r.timestamp).toDateString();
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(r);
+  });
+
+  let html = '';
+  Object.keys(groups).forEach(k => {
+    const d = new Date(k);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    let label = k;
+    if (d.toDateString() === today.toDateString()) label = 'Today';
+    else if (d.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+    else label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+    html += `<div class="history-date">${label}</div>`;
+    groups[k].forEach(r => {
+      const cls = r.value < 70 ? 'low' : r.value > 180 ? 'high' : 'normal';
+      const t = new Date(r.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      html += `
+        <div class="history-item" data-id="${r.id}">
+          <div class="history-val ${cls}">${r.value}<span class="unit">mg/dL</span></div>
+          <div class="history-meta">
+            <div class="history-time">${t}</div>
+            ${r.tag ? `<div class="history-tag">${r.tag}</div>` : ''}
+          </div>
+          <button class="history-delete" data-id="${r.id}">✕</button>
+        </div>`;
     });
-    saveReadings();
-  }
+  });
+  list.innerHTML = html;
 
-  function deleteReadingById(id) {
-    readings = readings.filter(r => r.id !== id);
-    saveReadings();
-  }
+  list.querySelectorAll('.history-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      if (confirm('Delete this reading?')) {
+        deleteReading(id);
+        renderAll();
+        showToast('Reading deleted');
+      }
+    });
+  });
+}
 
-  function generateSamples() {
-    const now = Date.now();
-    const DAY = 86400000;
-    const tagList = TAGS;
-    const result = [];
-    for (let d = 21; d >= 0; d--) {
-      const count = 2 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < count; i++) {
-        const t = now - d * DAY + (6 + i * 4.5 + Math.random() * 2) * 3600000;
-        const bases = [95, 130, 155, 100, 140];
-        const base = bases[i % bases.length];
-        const val = Math.round(base + (Math.random() - 0.5) * 28);
-        result.push({
-          id: Math.random().toString(36).slice(2) + Math.round(t),
-          value: Math.max(72, Math.min(175, val)),
-          tag: tagList[i % tagList.length],
-          timestamp: Math.round(t),
-          source: 'sample'
-        });
+// ── INSIGHT ──
+function updateInsight() {
+  const el = document.getElementById('insightText');
+  if (readings.length < 3) {
+    el.textContent = 'Log more readings to see personalized insights.';
+    return;
+  }
+  const last5 = readings.slice(0, 5).map(r => r.value).reverse();
+  const trend = last5[last5.length - 1] - last5[0];
+  let msg = 'Your levels are stable. Keep it up! 💪';
+  if (trend > 20) msg = '📈 Trending up — consider checking after meals.';
+  else if (trend > 10) msg = '↗️ Slight upward trend — keep an eye on it.';
+  else if (trend < -20) msg = '📉 Trending down — great progress!';
+  else if (trend < -10) msg = '↘️ Slight downward trend — doing well!';
+
+  // Check if most recent is high
+  if (readings[0].value > 180) msg = '⚠️ Latest reading is elevated — consider consulting your care plan.';
+  else if (readings[0].value < 70) msg = '⚠️ Latest reading is low — please take care.';
+
+  el.textContent = msg;
+}
+
+// ── CHART ──
+function setupChart() {
+  const ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+  if (chartInstance) chartInstance.destroy();
+
+  const data = getChartData(currentRange);
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [{
+        label: 'Glucose',
+        data: data.values,
+        tension: 0.35,
+        borderWidth: 2.5,
+        borderColor: '#0ea5e9',
+        backgroundColor: 'rgba(14,165,233,0.12)',
+        fill: true,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHitRadius: 10
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#18181b',
+          titleColor: '#f0f0f0',
+          bodyColor: '#a1a1aa',
+          borderColor: 'rgba(255,255,255,0.07)',
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { maxRotation: 0, autoSkip: true, color: '#71717a', font: { size: 10 } }
+        },
+        y: {
+          min: 40,
+          max: 240,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#71717a', font: { size: 10 }, stepSize: 40 }
+        }
+      },
+      interaction: {
+        intersect: false,
+        mode: 'index'
       }
     }
-    result.sort((a, b) => b.timestamp - a.timestamp);
-    return result;
-  }
+  });
 
-  // ── CLASSIFY ──────────────────────────────────────────────────
-  function classify(v) {
-    if (v < 70)   return { label: 'Low',       cls: 'badge-low',     color: '#ef4444' };
-    if (v <= 140) return { label: 'Normal',    cls: 'badge-normal',  color: '#22c55e' };
-    if (v <= 180) return { label: 'High',      cls: 'badge-high',    color: '#f59e0b' };
-    return           { label: 'Very High', cls: 'badge-veryhigh', color: '#ef4444' };
-  }
-
-  // ── GREETING ──────────────────────────────────────────────────
-  function updateGreeting() {
-    const h = new Date().getHours();
-    const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    const el = document.querySelector('.greeting h1');
-    if (el) el.textContent = g;
-  }
-
-  // ── NAV ───────────────────────────────────────────────────────
-  function setupNav() {
-    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  // Range toggles
+  document.querySelectorAll('#rangeToggle .toggle-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#rangeToggle .toggle-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      currentRange = parseInt(b.dataset.range);
+      setupChart();
     });
-    document.getElementById('fabScan').addEventListener('click', openCamera);
-  }
+  });
+}
 
-  function switchTab(tab) {
-    ['home', 'history'].forEach(name => {
-      const screen = document.getElementById(name + 'Screen');
-      const btn = document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1));
-      screen.classList.toggle('active', name === tab);
-      if (btn) btn.classList.toggle('active', name === tab);
+function getChartData(range) {
+  const now = new Date();
+  const labels = [];
+  const values = [];
+
+  if (range <= 30) {
+    for (let i = range - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dayReadings = readings.filter(r =>
+        new Date(r.timestamp).toDateString() === d.toDateString()
+      ).map(r => r.value);
+      labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      values.push(dayReadings.length ? Math.round(dayReadings.reduce((a, b) => a + b, 0) / dayReadings.length) : null);
+    }
+  } else {
+    for (let i = 51; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i * 7);
+      const weekReadings = readings.filter(r => {
+        const diff = (now - new Date(r.timestamp)) / 86400000;
+        return diff >= i * 7 && diff < (i + 1) * 7;
+      }).map(r => r.value);
+      labels.push(i % 4 === 0 ? d.toLocaleDateString('en-US', { month: 'short' }) : '');
+      values.push(weekReadings.length ? Math.round(weekReadings.reduce((a, b) => a + b, 0) / weekReadings.length) : null);
+    }
+  }
+  return { labels, values };
+}
+
+// ── UI BINDING ──
+function bindUI() {
+  // Tab navigation
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      const target = document.getElementById(btn.dataset.tab + 'Screen');
+      if (target) {
+        target.classList.add('active');
+        target.classList.remove('slide-in');
+        void target.offsetWidth;
+        target.classList.add('slide-in');
+        if (btn.dataset.tab === 'home') renderHome();
+        if (btn.dataset.tab === 'history') renderHistory();
+      }
     });
+  });
+
+  // FAB scan button
+  document.getElementById('fabScan').addEventListener('click', () => {
+    switchTab('scan');
+  });
+
+  // Scan screen
+  document.getElementById('closeScanBtn').addEventListener('click', () => switchTab('home'));
+  document.getElementById('startScanBtn').addEventListener('click', startCamera);
+  document.getElementById('manualEntryBtn').addEventListener('click', () => {
+    switchTab('home');
+    openManual();
+  });
+
+  // Camera
+  document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
+  document.getElementById('captureBtn').addEventListener('click', captureAndOCR);
+  document.getElementById('switchCam').addEventListener('click', switchCamera);
+
+  // Confirm
+  document.getElementById('discardConfirmBtn').addEventListener('click', closeConfirm);
+  document.getElementById('saveConfirmedBtn').addEventListener('click', saveConfirmedReading);
+
+  // Manual
+  document.getElementById('closeManualBtn').addEventListener('click', closeManual);
+  document.getElementById('manualSaveBtn').addEventListener('click', saveManual);
+  document.getElementById('manualModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('manualModal')) closeManual();
+  });
+
+  // Export
+  document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+  // Keyboard: Enter in manual input saves
+  document.getElementById('manualInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveManual();
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(tab + 'Screen');
+  if (target) {
+    target.classList.add('active');
+    target.classList.remove('slide-in');
+    void target.offsetWidth;
+    target.classList.add('slide-in');
     if (tab === 'home') renderHome();
     if (tab === 'history') renderHistory();
   }
+}
 
-  // ── RENDER ALL ────────────────────────────────────────────────
-  function renderAll() {
-    renderHome();
-    renderHistory();
-  }
-
-  // ── HOME ──────────────────────────────────────────────────────
-  function renderHome() {
-    const el = document.getElementById('latestDisplay');
-    if (readings.length) {
-      const r = readings[0];
-      const s = classify(r.value);
-      const time = new Date(r.timestamp).toLocaleString(undefined, {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      });
-      el.innerHTML = `
-        <span class="latest-value" style="color:${s.color}">${r.value}</span><span class="latest-unit">mg/dL</span><br>
-        <span class="status-badge ${s.cls}">${s.label}</span>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${time}${r.tag ? ' · ' + r.tag : ''}</div>
-      `;
+// ── CAMERA ──
+async function startCamera() {
+  document.getElementById('cameraScreen').classList.add('active');
+  document.getElementById('processingOverlay').classList.remove('show');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const v = document.getElementById('video');
+    v.srcObject = stream;
+    await v.play();
+  } catch (err) {
+    closeCamera();
+    if (err.name === 'NotAllowedError') {
+      showToast('Camera permission denied — enter manually');
+      openManual();
+    } else if (err.name === 'NotFoundError') {
+      showToast('No camera found — enter manually');
+      openManual();
     } else {
-      el.innerHTML = '<div class="no-data-hint">No readings yet — tap 📷 to scan</div>';
-    }
-
-    // Stats
-    const now = Date.now();
-    const d7  = readings.filter(r => now - r.timestamp <= 7  * 86400000).map(r => r.value);
-    const d30 = readings.filter(r => now - r.timestamp <= 30 * 86400000).map(r => r.value);
-    const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
-    const inRng = d30.filter(v => v >= 70 && v <= 180).length;
-    const pct = d30.length ? Math.round(inRng / d30.length * 100) : null;
-
-    document.getElementById('avg7').textContent   = avg(d7)  !== null ? avg(d7)  : '—';
-    document.getElementById('avg30').textContent  = avg(d30) !== null ? avg(d30) : '—';
-    document.getElementById('inRange').textContent = pct !== null ? pct + '%' : '—';
-
-    renderChart(currentRange);
-  }
-
-  // ── CHART ─────────────────────────────────────────────────────
-  function setupChart() {
-    document.querySelectorAll('.toggle-btn[data-days]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentRange = parseInt(btn.dataset.days);
-        document.querySelectorAll('.toggle-btn[data-days]').forEach(b =>
-          b.classList.toggle('active', parseInt(b.dataset.days) === currentRange)
-        );
-        renderChart(currentRange);
-      });
-    });
-    window.addEventListener('resize', () => renderChart(currentRange));
-  }
-
-  function renderChart(days) {
-    const canvas = document.getElementById('trendCanvas');
-    const dpr = window.devicePixelRatio || 1;
-    const parent = canvas.parentElement;
-    const W = parent.clientWidth - 36; // card has 18px padding each side
-    const H = 160;
-    canvas.width  = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width  = W + 'px';
-    canvas.style.height = H + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, W, H);
-
-    const now = Date.now();
-    const data = readings
-      .filter(r => now - r.timestamp <= days * 86400000)
-      .slice()
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    if (data.length < 2) {
-      ctx.fillStyle = '#555';
-      ctx.font = '13px -apple-system, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(data.length === 0 ? 'No data for this range' : 'Need more data', W / 2, H / 2);
-      return;
-    }
-
-    const pad = { top: 14, bottom: 28, left: 38, right: 12 };
-    const cW = W - pad.left - pad.right;
-    const cH = H - pad.top - pad.bottom;
-
-    const vals = data.map(r => r.value);
-    const minV = Math.max(0,  Math.min(...vals) - 20);
-    const maxV = Math.max(...vals) + 20;
-    const range = maxV - minV || 1;
-
-    const toX = i => pad.left + (i / (data.length - 1)) * cW;
-    const toY = v => pad.top + cH - ((v - minV) / range * cH);
-
-    // In-range band
-    const bandY1 = toY(Math.min(180, maxV));
-    const bandY2 = toY(Math.max(70,  minV));
-    ctx.fillStyle = 'rgba(34,197,94,0.06)';
-    ctx.fillRect(pad.left, bandY1, cW, Math.max(0, bandY2 - bandY1));
-
-    // Reference lines at 70 and 180
-    [70, 180].forEach(ref => {
-      if (ref < minV || ref > maxV) return;
-      const y = toY(ref);
-      ctx.beginPath();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = ref === 70 ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)';
-      ctx.lineWidth = 1;
-      ctx.moveTo(pad.left, y);
-      ctx.lineTo(pad.left + cW, y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = ref === 70 ? 'rgba(239,68,68,0.55)' : 'rgba(245,158,11,0.55)';
-      ctx.font = '9px -apple-system, system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(ref, pad.left - 3, y + 3);
-    });
-
-    // Y-axis labels
-    ctx.fillStyle = '#555';
-    ctx.font = '9px -apple-system, system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    [minV, Math.round((minV + maxV) / 2), maxV].forEach(v => {
-      const y = toY(v);
-      ctx.fillText(Math.round(v), pad.left - 3, y + 3);
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-      ctx.moveTo(pad.left, y);
-      ctx.lineTo(pad.left + cW, y);
-      ctx.stroke();
-    });
-
-    // X-axis date labels (3 evenly spaced)
-    ctx.fillStyle = '#555';
-    ctx.font = '9px -apple-system, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    const labelIdxs = [0, Math.floor((data.length - 1) / 2), data.length - 1];
-    labelIdxs.forEach(i => {
-      const d = new Date(data[i].timestamp);
-      const lbl = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      ctx.fillText(lbl, toX(i), H - 6);
-    });
-
-    // Line gradient fill
-    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
-    grad.addColorStop(0, 'rgba(59,130,246,0.18)');
-    grad.addColorStop(1, 'rgba(59,130,246,0)');
-    ctx.beginPath();
-    data.forEach((r, i) => {
-      i === 0 ? ctx.moveTo(toX(i), toY(r.value)) : ctx.lineTo(toX(i), toY(r.value));
-    });
-    ctx.lineTo(toX(data.length - 1), pad.top + cH);
-    ctx.lineTo(toX(0), pad.top + cH);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // Line
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(59,130,246,0.75)';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    data.forEach((r, i) => {
-      i === 0 ? ctx.moveTo(toX(i), toY(r.value)) : ctx.lineTo(toX(i), toY(r.value));
-    });
-    ctx.stroke();
-
-    // Dots
-    data.forEach((r, i) => {
-      const x = toX(i), y = toY(r.value);
-      const c = classify(r.value);
-      ctx.beginPath();
-      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = c.color;
-      ctx.fill();
-      ctx.strokeStyle = '#0a0a0a';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    });
-  }
-
-  // ── HISTORY ───────────────────────────────────────────────────
-  function setupHistory() {
-    document.getElementById('exportBtn').addEventListener('click', exportCSV);
-  }
-
-  function renderHistory() {
-    const el = document.getElementById('historyList');
-    if (!readings.length) {
-      el.innerHTML = '<div class="empty-history">No readings yet.<br>Tap 📷 to scan your first glucose reading.</div>';
-      return;
-    }
-
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-
-    const groups = {};
-    const order = [];
-    readings.forEach(r => {
-      const d = new Date(r.timestamp); d.setHours(0, 0, 0, 0);
-      let label;
-      if (d.getTime() === today.getTime()) label = 'Today';
-      else if (d.getTime() === yesterday.getTime()) label = 'Yesterday';
-      else label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      if (!groups[label]) { groups[label] = []; order.push(label); }
-      groups[label].push(r);
-    });
-
-    let html = '';
-    order.forEach(day => {
-      html += `<div class="day-group"><div class="day-label">${day}</div>`;
-      groups[day].forEach(r => {
-        const t = new Date(r.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-        const s = classify(r.value);
-        html += `<div class="reading-row" data-id="${r.id}">
-          <div class="color-dot" style="background:${s.color}"></div>
-          <div class="row-value" style="color:${s.color}">${r.value}</div>
-          <div class="row-tag">${r.tag || '—'}</div>
-          <div class="row-time">${t}</div>
-        </div>`;
-      });
-      html += '</div>';
-    });
-    el.innerHTML = html;
-
-    el.querySelectorAll('.reading-row[data-id]').forEach(row => {
-      row.addEventListener('click', () => promptDelete(row.dataset.id));
-    });
-  }
-
-  // ── DELETE ────────────────────────────────────────────────────
-  function setupDelete() {
-    document.getElementById('cancelDeleteBtn').addEventListener('click', closeDeleteModal);
-    document.getElementById('confirmDeleteBtn').addEventListener('click', doDelete);
-    document.getElementById('deleteModal').addEventListener('click', e => {
-      if (e.target === document.getElementById('deleteModal')) closeDeleteModal();
-    });
-  }
-
-  function promptDelete(id) {
-    const r = readings.find(x => x.id === id);
-    if (!r) return;
-    pendingDeleteId = id;
-    document.getElementById('deleteDesc').textContent =
-      `${r.value} mg/dL — ${r.tag || '—'} — ${new Date(r.timestamp).toLocaleString()}`;
-    document.getElementById('deleteModal').classList.add('open');
-  }
-
-  function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.remove('open');
-    pendingDeleteId = null;
-  }
-
-  function doDelete() {
-    if (!pendingDeleteId) return;
-    deleteReadingById(pendingDeleteId);
-    closeDeleteModal();
-    renderHistory();
-    renderHome();
-    showToast('Reading deleted');
-  }
-
-  // ── CAMERA ────────────────────────────────────────────────────
-  function setupScan() {
-    document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
-    document.getElementById('captureBtn').addEventListener('click', captureAndOCR);
-    document.getElementById('manualFallbackBtn').addEventListener('click', () => {
-      closeCamera();
-      openManualEntry();
-    });
-  }
-
-  async function openCamera() {
-    document.getElementById('cameraScreen').classList.add('active');
-    document.getElementById('processingOverlay').classList.remove('show');
-    try {
-      videoStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
-      const v = document.getElementById('videoEl');
-      v.srcObject = videoStream;
-      await v.play();
-    } catch (err) {
-      closeCamera();
-      if (err.name === 'NotAllowedError') {
-        showToast('Camera permission denied — enter manually');
-        openManualEntry();
-      } else if (err.name === 'NotFoundError') {
-        showToast('No camera found — enter manually');
-        openManualEntry();
-      } else {
-        showToast('Camera unavailable — enter manually');
-        openManualEntry();
-      }
+      showToast('Camera unavailable — enter manually');
+      openManual();
     }
   }
+}
 
-  function closeCamera() {
-    stopVideoStream();
-    document.getElementById('cameraScreen').classList.remove('active');
-    document.getElementById('processingOverlay').classList.remove('show');
+function closeCamera() {
+  stopStream();
+  document.getElementById('cameraScreen').classList.remove('active');
+  document.getElementById('processingOverlay').classList.remove('show');
+  switchTab('home');
+}
+
+function stopStream() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
   }
+}
 
-  function stopVideoStream() {
-    if (videoStream) {
-      videoStream.getTracks().forEach(t => t.stop());
-      videoStream = null;
-    }
+async function switchCamera() {
+  facing = facing === 'environment' ? 'user' : 'environment';
+  stopStream();
+  await startCamera();
+}
+
+async function captureAndOCR() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('captureCanvas');
+  const overlay = document.getElementById('processingOverlay');
+  const procText = document.getElementById('procText');
+
+  overlay.classList.add('show');
+  procText.textContent = 'Capturing frame…';
+
+  const vw = video.videoWidth || video.clientWidth;
+  const vh = video.videoHeight || video.clientHeight;
+  const cropW = vw * 0.75;
+  const cropH = cropW / 2.5;
+  const cropX = (vw - cropW) / 2;
+  const cropY = (vh - cropH) / 2;
+
+  canvas.width = cropW;
+  canvas.height = cropH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  // Upscale + binarize for better OCR
+  const scale = 3;
+  const oc = document.createElement('canvas');
+  oc.width = cropW * scale;
+  oc.height = cropH * scale;
+  const octx = oc.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(canvas, 0, 0, oc.width, oc.height);
+
+  const id = octx.getImageData(0, 0, oc.width, oc.height);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const g = 0.299 * id.data[i] + 0.587 * id.data[i + 1] + 0.114 * id.data[i + 2];
+    const c = g > 128 ? 255 : 0;
+    id.data[i] = id.data[i + 1] = id.data[i + 2] = c;
   }
+  octx.putImageData(id, 0, 0);
 
-  async function captureAndOCR() {
-    const video   = document.getElementById('videoEl');
-    const canvas  = document.getElementById('captureCanvas');
-    const proc    = document.getElementById('processingOverlay');
-    const procTxt = document.getElementById('procText');
-    proc.classList.add('show');
-    procTxt.textContent = 'Capturing frame…';
-
-    // Crop guide-box region (~75% width, 30% height from center)
-    const vw = video.videoWidth  || video.clientWidth;
-    const vh = video.videoHeight || video.clientHeight;
-    const cropW = vw * 0.75;
-    const cropH = cropW / 2.5;
-    const cropX = (vw - cropW) / 2;
-    const cropY = (vh - cropH) / 2;
-
-    canvas.width  = cropW;
-    canvas.height = cropH;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-    // Upscale & binarize for better OCR accuracy
-    const scale = 3;
-    const oc = document.createElement('canvas');
-    oc.width  = cropW * scale;
-    oc.height = cropH * scale;
-    const octx = oc.getContext('2d');
-    octx.imageSmoothingEnabled = false;
-    octx.drawImage(canvas, 0, 0, oc.width, oc.height);
-    const id = octx.getImageData(0, 0, oc.width, oc.height);
-    for (let i = 0; i < id.data.length; i += 4) {
-      const g = 0.299 * id.data[i] + 0.587 * id.data[i + 1] + 0.114 * id.data[i + 2];
-      const c = g > 128 ? 255 : 0;
-      id.data[i] = id.data[i + 1] = id.data[i + 2] = c;
-    }
-    octx.putImageData(id, 0, 0);
-
-    procTxt.textContent = 'Reading display…';
-    try {
-      const Tess = window.Tesseract;
-      if (!Tess) throw new Error('Tesseract not loaded');
-      const result = await Tess.recognize(oc, 'eng', {
-        tessedit_char_whitelist: '0123456789.',
-        tessedit_pageseg_mode: '7'
-      });
-      const text = result.data.text.replace(/\s+/g, '');
-      const num  = parseOCRText(text);
-      proc.classList.remove('show');
-      if (num !== null) {
-        stopVideoStream();
-        document.getElementById('cameraScreen').classList.remove('active');
-        openConfirmScreen(num, 'scan');
-      } else {
-        showToast('Could not read a number — try again or enter manually');
-      }
-    } catch (err) {
-      proc.classList.remove('show');
-      showToast('OCR failed — please enter manually');
-      console.error('OCR:', err);
-    }
-  }
-
-  function parseOCRText(text) {
-    const matches = text.match(/\d+(?:\.\d+)?/g) || [];
-    for (const m of matches) {
-      const v = parseFloat(m);
-      if (v >= 20 && v <= 600) return Math.round(v);
-    }
-    return null;
-  }
-
-  // ── CONFIRM SCREEN ────────────────────────────────────────────
-  function setupConfirm() {
-    document.getElementById('closeConfirmBtn').addEventListener('click',  closeConfirmScreen);
-    document.getElementById('discardConfirmBtn').addEventListener('click', closeConfirmScreen);
-    document.getElementById('saveConfirmedBtn').addEventListener('click',  saveConfirmed);
-  }
-  // Call setupConfirm eagerly (elements are in DOM)
-  setupConfirm();
-
-  function openConfirmScreen(value, source) {
-    pendingValue  = value;
-    pendingSource = source;
-    currentTag    = '';
-    const s = classify(value);
-    document.getElementById('confirmNum').textContent  = value;
-    document.getElementById('confirmNum').style.color  = s.color;
-    document.getElementById('confirmTitle').textContent =
-      source === 'scan' ? `Found: ${value} mg/dL — confirm?` : 'Confirm Reading';
-    renderTagGrid('confirmTags');
-    document.getElementById('confirmScreen').classList.add('active');
-  }
-
-  function closeConfirmScreen() {
-    document.getElementById('confirmScreen').classList.remove('active');
-    pendingValue = null;
-  }
-
-  function saveConfirmed() {
-    if (pendingValue === null) return;
-    addReading(pendingValue, currentTag, pendingSource);
-    closeConfirmScreen();
-    renderAll();
-    showToast('Reading saved ✓');
-  }
-
-  // ── MANUAL ENTRY ──────────────────────────────────────────────
-  function setupManual() {
-    document.getElementById('closeManualBtn').addEventListener('click', closeManualEntry);
-    document.getElementById('manualSaveBtn').addEventListener('click',  saveManual);
-    document.getElementById('manualModal').addEventListener('click', e => {
-      if (e.target === document.getElementById('manualModal')) closeManualEntry();
+  procText.textContent = 'Reading meter…';
+  try {
+    if (!window.Tesseract) throw new Error('Tesseract not loaded');
+    const result = await Tesseract.recognize(oc, 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          procText.textContent = `Reading meter… ${Math.round(m.progress * 100)}%`;
+        }
+      },
+      tessedit_char_whitelist: '0123456789.',
+      tessedit_pageseg_mode: '7'
     });
-  }
-
-  function openManualEntry() {
-    currentTag = '';
-    document.getElementById('manualInput').value = '';
-    renderTagGrid('manualTags');
-    document.getElementById('manualModal').classList.add('open');
-    setTimeout(() => document.getElementById('manualInput').focus(), 320);
-  }
-
-  function closeManualEntry() {
-    document.getElementById('manualModal').classList.remove('open');
-  }
-
-  function saveManual() {
-    const v = parseInt(document.getElementById('manualInput').value, 10);
-    if (!v || v < 20 || v > 600) {
-      showToast('Enter a value between 20 and 600');
-      return;
+    const text = result.data.text.replace(/\s+/g, '');
+    const num = parseOCRText(text);
+    overlay.classList.remove('show');
+    if (num !== null) {
+      stopStream();
+      document.getElementById('cameraScreen').classList.remove('active');
+      openConfirm(num, 'scan');
+    } else {
+      showToast('Could not read the number — try again or enter manually');
     }
-    addReading(v, currentTag, 'manual');
-    closeManualEntry();
-    renderAll();
-    showToast('Reading saved ✓');
+  } catch (err) {
+    overlay.classList.remove('show');
+    showToast('OCR failed — please enter manually');
+    console.error('OCR error:', err);
   }
+}
 
-  // ── TAG GRID ──────────────────────────────────────────────────
-  function renderTagGrid(containerId) {
-    const el = document.getElementById(containerId);
-    el.innerHTML = TAGS.map(t =>
-      `<button class="tag-pill${currentTag === t ? ' selected' : ''}" data-tag="${t}">${t}</button>`
-    ).join('');
-    el.querySelectorAll('.tag-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentTag = currentTag === btn.dataset.tag ? '' : btn.dataset.tag;
-        renderTagGrid(containerId);
-      });
+function parseOCRText(text) {
+  const matches = text.match(/\d+(?:\.\d+)?/g) || [];
+  for (const m of matches) {
+    const v = parseFloat(m);
+    if (v >= 20 && v <= 600) return Math.round(v);
+  }
+  return null;
+}
+
+// ── CONFIRM ──
+function openConfirm(value, source) {
+  currentTag = '';
+  const s = classify(value);
+  document.getElementById('confirmNum').textContent = value;
+  document.getElementById('confirmNum').style.color = s.color;
+  document.getElementById('confirmLabel').textContent = 'mg/dL — ' + s.label;
+  renderTags('confirmTags');
+  document.getElementById('confirmScreen').classList.add('active');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmScreen').classList.remove('active');
+  switchTab('home');
+}
+
+function saveConfirmedReading() {
+  const numEl = document.getElementById('confirmNum');
+  const value = parseInt(numEl.textContent);
+  if (!value || value < 20 || value > 600) return;
+  addReading(value, currentTag, 'scan');
+  closeConfirm();
+  showToast('Reading saved ✓');
+  showSuccess(value);
+  renderAll();
+}
+
+// ── MANUAL ──
+function openManual() {
+  currentTag = '';
+  document.getElementById('manualInput').value = '';
+  renderTags('manualTags');
+  document.getElementById('manualModal').classList.add('open');
+  setTimeout(() => document.getElementById('manualInput').focus(), 350);
+}
+
+function closeManual() {
+  document.getElementById('manualModal').classList.remove('open');
+}
+
+function saveManual() {
+  const v = parseInt(document.getElementById('manualInput').value, 10);
+  if (!v || v < 20 || v > 600) {
+    showToast('Enter a value between 20 and 600');
+    return;
+  }
+  addReading(v, currentTag, 'manual');
+  closeManual();
+  showToast('Reading saved ✓');
+  showSuccess(v);
+  renderAll();
+}
+
+// ── TAGS ──
+function renderTags(containerId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = TAGS.map(t =>
+    `<button class="tag-pill${currentTag === t ? ' selected' : ''}" data-tag="${t}">${t}</button>`
+  ).join('');
+  el.querySelectorAll('.tag-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentTag = currentTag === btn.dataset.tag ? '' : btn.dataset.tag;
+      renderTags(containerId);
     });
-  }
+  });
+}
 
-  // ── EXPORT CSV ────────────────────────────────────────────────
-  function exportCSV() {
-    if (!readings.length) { showToast('No data to export'); return; }
-    const rows = ['ID,Value (mg/dL),Tag,Timestamp,Source'];
-    readings.forEach(r => {
-      rows.push(`${r.id},${r.value},"${(r.tag || '').replace(/"/g, '""')}",${new Date(r.timestamp).toISOString()},${r.source}`);
-    });
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `glucoscan_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+// ── EXPORT CSV ──
+function exportCSV() {
+  if (!readings.length) {
+    showToast('No data to export');
+    return;
   }
+  const rows = ['ID,Value (mg/dL),Tag,Timestamp,Source'];
+  readings.forEach(r => {
+    rows.push(`${r.id},${r.value},"${(r.tag || '').replace(/"/g, '""')}",${new Date(r.timestamp).toISOString()},${r.source}`);
+  });
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `glucoscan_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
-  // ── TOAST ─────────────────────────────────────────────────────
-  function showToast(msg) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
-  }
+// ── TOAST ──
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
 
-}); // end DOMContentLoaded
-</script>
-</body>
-</html>
-<script>
+// ── SUCCESS ──
+function showSuccess(value) {
+  const overlay = document.getElementById('successOverlay');
+  const s = classify(value);
+  document.getElementById('successText').textContent = `${value} mg/dL — ${s.label}`;
+  overlay.classList.add('show');
+  setTimeout(() => overlay.classList.remove('show'), 1800);
+}
+
+// ── VIBRATE (haptic feedback) ──
+function vibrate(ms) {
+  if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+// ── BOOT ──
 document.addEventListener('DOMContentLoaded', () => {
-  const STORAGE_KEY = 'glucoscan_readings';
-  let readings = [];
-  let stream = null;
-  let currentTag = '';
-  let chart = null;
-  let currentRange = 10;
-  let facing = 'environment';
+  // Inject tab bar
+  const tabBar = document.createElement('div');
+  tabBar.className = 'tab-bar';
+  tabBar.innerHTML = `
+    <button class="tab-btn active" data-tab="home">
+      <span class="tab-icon">🏠</span>
+      Home
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <span class="tab-icon">📋</span>
+      History
+    </button>
+    <button class="tab-btn" data-tab="scan">
+      <span class="tab-icon">📷</span>
+      Scan
+    </button>
+  `;
+  document.body.appendChild(tabBar);
 
-  if (window.ChartAnnotation) { try { Chart.register(window.ChartAnnotation); } catch(e){} }
-  loadReadings(); updateGreeting(); setupNav(); setupScan(); setupManual(); setupHistory(); renderAll();
-
-  function loadReadings(){
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw){ readings = JSON.parse(raw); }
-      else { readings = generateSamples(); saveReadings(); }
-    } catch(e){ readings = generateSamples(); }
-    readings.sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp));
-  }
-  function saveReadings(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(readings)); }
-
-  function generateSamples(){
-    const now = new Date();
-    const tags = ['Fasting','Before meal','After meal','Bedtime',''];
-    const base = [95,102,88,145,110,98,125,105,92,118,135,100,87,112,128,94,108,142,96,103];
-    return base.map((v,i)=>{
-      const d = new Date(now); d.setDate(now.getDate()-(base.length-i)*1.5); d.setHours(7+(i%4)*3);
-      return {id:Date.now()+i, value:v+Math.floor(Math.random()*10-5), timestamp:d.toISOString(), tag:tags[i%tags.length]};
-    });
-  }
-
-  function updateGreeting(){
-    const h = new Date().getHours();
-    const g = h<12?'Good morning':h<18?'Good afternoon':'Good evening';
-    const el = document.querySelector('.greeting h1');
-    if(el) el.textContent = g;
-  }
-
-  function setupNav(){
-    document.querySelectorAll('.nav-item').forEach(btn=>{
-      btn.onclick = ()=> showTab(btn.dataset.tab);
-    });
-  }
-  window.showTab = function(tab){
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.getElementById('tab-'+tab).classList.add('active');
-    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.tab===tab));
-    if(tab==='home') renderHome();
-    if(tab==='history') renderHistory();
-    if(tab==='scan') showScanInitial();
-  };
-
-  function renderAll(){ renderHome(); renderHistory(); }
-
-  function renderHome(){
-    const has = readings.length>0;
-    document.getElementById('emptyHome').classList.toggle('hidden', has);
-    document.getElementById('homeContent').classList.toggle('hidden', !has);
-    if(!has) return;
-    const latest = readings[0];
-    document.getElementById('latestValue').textContent = latest.value;
-    document.getElementById('latestTime').textContent = new Date(latest.timestamp).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-    const badge = document.getElementById('latestBadge');
-    const isLow = latest.value<70, isHigh = latest.value>180;
-    badge.textContent = isLow?'Low':isHigh?'High':'In range';
-    badge.style.background = isLow?'#fee2e2':isHigh?'#ffedd5':'#ecfeff';
-    badge.style.color = isLow?'#b91c1c':isHigh?'#c2410c':'#0891b2';
-    document.getElementById('avg7').textContent = avgDays(7);
-    document.getElementById('avg30').textContent = avgDays(30);
-    setupChart(); updateInsight();
-  }
-
-  function avgDays(d){
-    const cutoff = Date.now()-d*86400000;
-    const vals = readings.filter(r=>new Date(r.timestamp)>cutoff).map(r=>r.value);
-    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : '--';
-  }
-
-  function setupChart(){
-    const ctx = document.getElementById('trendChart');
-    if(chart) chart.destroy();
-    const data = getChartData(currentRange);
-    chart = new Chart(ctx, {
-      type:'line',
-      data:{labels:data.labels, datasets:[{label:'Glucose',data:data.values,tension:.35,borderWidth:2.5,borderColor:'#0ea5e9',backgroundColor:'rgba(14,165,233,.12)',fill:true,pointRadius:0,pointHoverRadius:5}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true}},y:{min:60,max:220,grid:{color:'#f1f5f9'}}}}
-    });
-    document.getElementById('rangeToggle').querySelectorAll('button').forEach(b=>{
-      b.onclick=()=>{document.querySelectorAll('#rangeToggle button').forEach(x=>x.classList.remove('active'));b.classList.add('active');currentRange=parseInt(b.dataset.range);setupChart();};
-    });
-  }
-
-  function getChartData(range){
-    const now=new Date(); let labels=[], values=[];
-    if(range<=30){
-      for(let i=range-1;i>=0;i--){
-        const d=new Date(now); d.setDate(now.getDate()-i);
-        const dv=readings.filter(r=>new Date(r.timestamp).toDateString()===d.toDateString()).map(r=>r.value);
-        labels.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
-        values.push(dv.length?Math.round(dv.reduce((a,b)=>a+b,0)/dv.length):null);
-      }
-    } else {
-      for(let i=51;i>=0;i--){
-        const d=new Date(now); d.setDate(now.getDate()-i*7);
-        const wv=readings.filter(r=>{const diff=(now-new Date(r.timestamp))/86400000;return diff>=i*7&&diff<(i+1)*7;}).map(r=>r.value);
-        labels.push(i%4===0?d.toLocaleDateString('en-US',{month:'short'}):'');
-        values.push(wv.length?Math.round(wv.reduce((a,b)=>a+b,0)/wv.length):null);
-      }
-    }
-    return {labels,values};
-  }
-
-  function updateInsight(){
-    const last10=readings.slice(0,10).map(r=>r.value).reverse();
-    if(last10.length<3) return;
-    const trend=last10[last10.length-1]-last10[0];
-    let msg='Your levels are stable. Keep it up!';
-    if(trend>15) msg='Trending up — consider checking after meals.';
-    if(trend<-15) msg='Trending down — great progress!';
-    document.getElementById('insightText').textContent=msg;
-  }
-
-  function setupScan(){
-    document.getElementById('startScanBtn').onclick=startCamera;
-    document.getElementById('cancelScan').onclick=stopCamera;
-    document.getElementById('captureBtn').onclick=capture;
-    document.getElementById('switchCam').onclick=switchCamera;
-    document.getElementById('retryBtn').onclick=()=>showCamera();
-    document.getElementById('confirmBtn').onclick=confirmReading;
-    document.querySelectorAll('#tagChips .tag').forEach(t=>{
-      t.onclick=()=>{document.querySelectorAll('#tagChips .tag').forEach(x=>x.classList.remove('active'));t.classList.add('active');currentTag=t.dataset.tag;};
-    });
-  }
-
-  function showScanInitial(){ hideAllScan(); document.getElementById('scanInitial').classList.remove('hidden'); stopCamera(); }
-  function hideAllScan(){ ['scanInitial','cameraView','processingView','resultView'].forEach(id=>document.getElementById(id).classList.add('hidden')); }
-  function showCamera(){ hideAllScan(); document.getElementById('cameraView').classList.remove('hidden'); }
-
-  async function startCamera(){
-    showCamera();
-    try {
-      if(stream) stream.getTracks().forEach(t=>t.stop());
-      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:1700}},audio:false});
-      document.getElementById('video').srcObject=stream;
-    } catch(e){ alert('Camera access needed. Please allow camera permission.'); showScanInitial(); }
-  }
-  function stopCamera(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} showScanInitial(); }
-  async function switchCamera(){ facing=facing==='environment'?'user':'environment'; await startCamera(); }
-
-  async function capture(){
-    const video=document.getElementById('video');
-    const canvas=document.getElementById('captureCanvas');
-    const w=video.videoWidth, h=video.videoHeight;
-    canvas.width=w; canvas.height=h;
-    canvas.getContext('2d').drawImage(video,0,0,w,h);
-    const cw=w*0.72, ch=h*0.28, cx=(w-cw)/2, cy=(h-ch)/2;
-    const crop=document.createElement('canvas'); crop.width=cw; crop.height=ch;
-    crop.getContext('2d').drawImage(canvas,cx,cy,cw,ch,0,0,cw,ch);
-    hideAllScan(); document.getElementById('processingView').classList.remove('hidden');
-    vibrate(20);
-    try {
-      const {data:{text}}=await Tesseract.recognize(crop,'eng',{
-        logger:m=>{if(m.status==='recognizing text') document.getElementById('ocrProgress').textContent=Math.round(m.progress*100)+'%';},
-        tessedit_char_whitelist:'0123456789'
-      });
-      showResult(extractGlucose(text));
-    } catch(e){ showResult(null); }
-    stopCamera();
-  }
-
-  function extractGlucose(text){
-    if(!text) return null;
-    const nums=(text.match(/\d{2,4}/g)||[]).map(n=>parseInt(n)).filter(n=>n>=20&&n<=600);
-    if(!nums.length) return null;
-    const ideal=nums.filter(n=>n>=50&&n<=400);
-    const pool=ideal.length?ideal:nums;
-    pool.sort((a,b)=>Math.abs(a-120)-Math.abs(b-120));
-    return pool[0];
-  }
-
-  function showResult(value){
-    hideAllScan(); document.getElementById('resultView').classList.remove('hidden');
-    document.getElementById('detectedValue').textContent=value||'--';
-    document.getElementById('manualAdjust').value=value||'';
-    document.getElementById('readingTime').value=new Date().toISOString().slice(0,16);
-    currentTag=''; document.querySelectorAll('#tagChips .tag').forEach(x=>x.classList.remove('active'));
-  }
-
-  function confirmReading(){
-    const v=parseInt(document.getElementById('manualAdjust').value);
-    if(!v||v<20||v>600){alert('Please enter a value between 20-600');return;}
-    const tsRaw=document.getElementById('readingTime').value;
-    const ts=tsRaw?new Date(tsRaw).toISOString():new Date().toISOString();
-    readings.unshift({id:Date.now(),value:v,timestamp:ts,tag:currentTag,source:'scan'});
-    saveReadings(); vibrate(30); showSuccess(v); showScanInitial(); showTab('home'); renderAll();
-  }
-
-  function showSuccess(v){
-    const overlay=document.getElementById('successOverlay');
-    document.getElementById('successText').textContent=v+' mg/dL logged';
-    overlay.classList.add('show');
-    setTimeout(()=>overlay.classList.remove('show'),1600);
-  }
-
-  function setupManual(){
-    document.getElementById('manualSave').onclick=()=>{
-      const v=parseInt(document.getElementById('manualValue').value);
-      if(!v||v<20||v>600){alert('Enter value 20-600');return;}
-      const tsRaw=document.getElementById('manualTime').value;
-      const ts=tsRaw?new Date(tsRaw).toISOString():new Date().toISOString();
-      const tag=document.querySelector('#manualTags .tag.active')?.dataset.tag||'';
-      readings.unshift({id:Date.now(),value:v,timestamp:ts,tag,source:'manual'});
-      saveReadings(); closeManual(); vibrate(20); showSuccess(v); renderAll(); showTab('home');
-    };
-    document.querySelectorAll('#manualTags .tag').forEach(t=>{
-      t.onclick=()=>{document.querySelectorAll('#manualTags .tag').forEach(x=>x.classList.remove('active'));t.classList.toggle('active');};
-    });
-  }
-  window.openManual=function(){
-    document.getElementById('manualModal').classList.add('active');
-    document.getElementById('manualTime').value=new Date().toISOString().slice(0,16);
-    document.getElementById('manualValue').value='';
-    setTimeout(()=>document.getElementById('manualValue').focus(),100);
-  };
-  window.closeManual=function(){ document.getElementById('manualModal').classList.remove('active'); };
-
-  function setupHistory(){ document.getElementById('exportBtn').onclick=exportCSV; }
-
-  function renderHistory(){
-    const list=document.getElementById('historyList');
-    if(!readings.length){list.innerHTML='<div class="empty-state"><p style="color:var(--text-2)">No readings yet</p></div>';return;}
-    const groups={};
-    readings.forEach(r=>{const k=new Date(r.timestamp).toDateString();(groups[k]=groups[k]||[]).push(r);});
-    let html='';
-    Object.keys(groups).forEach(k=>{
-      html+=`<div class="history-date">${formatDateGroup(new Date(k))}</div>`;
-      groups[k].forEach(r=>{
-        const cls=r.value<70?'low':r.value>180?'high':'in';
-        const time=new Date(r.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        html+=`<div class="history-item" data-id="${r.id}"><div class="history-value ${cls}">${r.value}<span>mg/dL</span></div><div class="history-meta"><div class="history-time">${time}</div>${r.tag?`<div class="history-tag">${r.tag}</div>`:''}</div><button class="history-delete">×</button></div>`;
-      });
-    });
-    list.innerHTML=html;
-    list.querySelectorAll('.history-delete').forEach(btn=>{
-      btn.onclick=e=>{
-        const id=e.target.closest('.history-item').dataset.id;
-        if(confirm('Delete this reading?')){readings=readings.filter(r=>String(r.id)!==String(id));saveReadings();renderHistory();renderHome();vibrate(10);}
-      };
-    });
-  }
-
-  function formatDateGroup(d){
-    const now=new Date(), y=new Date(now); y.setDate(now.getDate()-1);
-    if(d.toDateString()===now.toDateString()) return 'Today';
-    if(d.toDateString()===y.toDateString()) return 'Yesterday';
-    return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-  }
-
-  function exportCSV(){
-    const rows=[['Date','Time','Value_mg_dL','Tag','Source']];
-    readings.forEach(r=>{const d=new Date(r.timestamp);rows.push([d.toLocaleDateString(),d.toLocaleTimeString(),r.value,r.tag||'',r.source||'']);});
-    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`glucoscan-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); vibrate(10);
-  }
-
-  function vibrate(ms){ if(navigator.vibrate) try{navigator.vibrate(ms);}catch(e){} }
+  // Now init everything
+  loadReadings();
+  updateGreeting();
+  renderAll();
+  bindUI();
+  setupChart();
 });
 </script>
 </body>
