@@ -467,16 +467,46 @@ let facing = 'environment';
 // ── INIT (called after DOM loaded below) ──
 
 // ── DATA ──
+// ── APP VERSION (bump this when you make breaking changes) ──
+const APP_VERSION = 2;
+const VERSION_KEY = 'glucoscan_version';
+
 function loadReadings() {
+  // Check if stored data is from an old version that needs migration
+  const storedVersion = parseInt(localStorage.getItem(VERSION_KEY)) || 0;
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       readings = JSON.parse(raw);
+      // Migration: old versions stored IDs as integers, new uses strings
+      if (storedVersion < 2 && Array.isArray(readings) && readings.length > 0) {
+        // Ensure timestamps are ISO strings and IDs are strings
+        readings = readings.map(r => ({
+          ...r,
+          id: String(r.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+          timestamp: typeof r.timestamp === 'string' && r.timestamp.includes('T')
+            ? r.timestamp : new Date(r.timestamp).toISOString()
+        }));
+        // Save migrated data and update version marker
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(readings));
+        localStorage.setItem(VERSION_KEY, String(APP_VERSION));
+      }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('GlucoScan: failed to load saved data, starting fresh', e);
+    readings = [];
+  }
+
   if (!Array.isArray(readings) || !readings.length) {
     readings = [];
   }
+
+  // Mark that we've migrated to the latest version
+  if (storedVersion < APP_VERSION) {
+    localStorage.setItem(VERSION_KEY, String(APP_VERSION));
+  }
+
   readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
@@ -1050,6 +1080,12 @@ function showSuccess(value) {
 function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
+
+// ── CACHE BUST: force re-download if HTML changed ──
+// If user's browser is serving an old cached version, this tiny
+// version check won't change, but the user can hard-refresh.
+// The real fix: GitHub Pages and most hosts add ?v=N cache busters.
+// For now: bump APP_VERSION above to trigger migration + re-read.
 
 // ── BOOT ──
 document.addEventListener('DOMContentLoaded', () => {
