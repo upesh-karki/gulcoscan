@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>GlucoScan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1566,7 +1569,64 @@ document.addEventListener('DOMContentLoaded', () => {
   bindRangeToggles();
   bindChartExpand();
   setupChart();
+
+  // Self-check: verify we're running the latest HTML
+  checkForUpdate();
 });
+
+// ── AUTO-UPDATE CHECK ──
+// Every time the page loads, fetch a fresh copy and compare versions.
+// If the server has a newer version, the user gets a one-tap reload.
+let updateChecked = false;
+function checkForUpdate() {
+  // Use cache-busting URL to force a fresh fetch from the server
+  const cacheBustUrl = location.href.split('?')[0] + '?v=' + Date.now();
+  fetch(cacheBustUrl, { cache: 'no-store' })
+    .then(r => r.text())
+    .then(html => {
+      // Extract APP_VERSION from the fetched HTML
+      const match = html.match(/const APP_VERSION = (\d+);/);
+      if (!match) return; // couldn't parse, skip
+      const serverVersion = parseInt(match[1], 10);
+      if (serverVersion > APP_VERSION) {
+        showUpdateBanner(serverVersion);
+      }
+      updateChecked = true;
+    })
+    .catch(() => {
+      // Network fail — not critical, skip silently
+    });
+}
+
+function showUpdateBanner(version) {
+  const existing = document.getElementById('updateBanner');
+  if (existing) return;
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  Object.assign(banner.style, {
+    position:'fixed', top:'0', left:'0', right:'0',
+    zIndex:'9999',
+    padding:'14px 20px',
+    background:'var(--accent)',
+    color:'white',
+    fontSize:'14px',
+    fontWeight:'600',
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'space-between',
+    gap:'12px',
+    animation:'slideDown 0.3s ease'
+  });
+  banner.innerHTML = '🔄 New version (v' + version + ') available' +
+    '<button onclick="location.reload(true)" style="padding:8px 16px;border-radius:8px;background:rgba(255,255,255,0.2);color:white;font-size:13px;font-weight:600;white-space:nowrap;">Reload</button>' +
+    '<button onclick="this.parentElement.remove()" style="padding:8px;border-radius:50%;background:rgba(255,255,255,0.1);color:white;font-size:16px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>';
+  document.body.prepend(banner);
+}
+
+// Add slideDown animation
+const styleEl = document.createElement('style');
+styleEl.textContent = '@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}';
+document.head.appendChild(styleEl);
 </script>
 </body>
 </html>
