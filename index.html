@@ -132,19 +132,23 @@
   .tab-btn.active .tab-icon{transform:scale(1.1)}
   .tab-btn:active .tab-icon{transform:scale(0.9)}
 
-  /* ── FAB ── */
-  #fabScan{
-    position:fixed;
-    bottom:calc(var(--tab-h) + var(--safe-bottom) + 20px);
-    right:20px;
-    width:56px;height:56px;border-radius:50%;
-    background:var(--accent);border:none;color:white;
-    font-size:22px;z-index:150;
-    box-shadow:0 4px 20px rgba(14,165,233,0.45);
-    display:flex;align-items:center;justify-content:center;
-    transition:transform 0.15s,box-shadow 0.15s;
+  /* ── SETTINGS SCREEN ── */
+  .settings-item{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px;margin:0 16px;border-bottom:1px solid var(--border);
+    animation:cardIn 0.3s var(--ease) both;
   }
-  #fabScan:active{transform:scale(0.9);box-shadow:0 2px 12px rgba(14,165,233,0.3);}
+  .settings-item:last-child{border-bottom:none;}
+  .settings-label{font-size:14px;font-weight:500;}
+  .settings-desc{font-size:12px;color:var(--text-3);margin-top:2px;}
+  .settings-chevron{color:var(--text-3);font-size:16px;}
+
+  .pill-input{
+    width:160px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--bg);color:var(--text);font-size:16px;font-weight:600;
+    text-align:center;letter-spacing:6px;outline:none;
+  }
+  .pill-input:focus{border-color:var(--accent)}
 
   /* ── HISTORY ── */
   .history-header{
@@ -324,10 +328,13 @@
 
 <!-- ════ HOME ════ -->
 <div id="homeScreen" class="screen active">
-  <div class="header">
-    <div class="greeting-text"><span id="greetingMsg">Good morning</span></div>
-    <h1>GlucoScan <span style="font-size:20px;color:var(--text-3);font-weight:400;">🩸</span></h1>
-    <div class="sub">Blood glucose tracker</div>
+  <div class="header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div>
+      <div class="greeting-text"><span id="greetingMsg">Good morning</span></div>
+      <h1>GlucoScan <span style="font-size:20px;color:var(--text-3);font-weight:400;">🩸</span></h1>
+      <div class="sub">Blood glucose tracker</div>
+    </div>
+    <button id="settingsBtn" style="margin-top:4px;width:40px;height:40px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--text-2);font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">⚙️</button>
   </div>
   <div class="scroll">
     <!-- Latest reading -->
@@ -376,6 +383,75 @@
       <button id="resetDataBtn" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.06);color:var(--low);font-size:13px;font-weight:600;transition:all 0.15s;">
         Reset All Data
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ SETTINGS ════ -->
+<div id="settingsScreen" class="screen">
+  <div class="history-header">
+    <h2>Settings</h2>
+    <button class="close-btn" id="closeSettingsBtn" style="width:36px;height:36px;">✕</button>
+  </div>
+  <div class="scroll">
+    <div class="card" style="padding:0;">
+      <div class="settings-item">
+        <div>
+          <div class="settings-label">Reset All Data</div>
+          <div class="settings-desc">Delete all readings from this device</div>
+        </div>
+        <button id="settingsResetBtn" style="padding:6px 14px;border-radius:8px;background:rgba(239,68,68,0.1);color:var(--low);font-size:12px;font-weight:600;border:1px solid rgba(239,68,68,0.2);">Reset</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;padding:0;">
+      <div class="settings-item" id="devOptionsEntry" style="cursor:pointer;">
+        <div>
+          <div class="settings-label">Developer Options</div>
+          <div class="settings-desc">Testing tools &amp; demo data</div>
+        </div>
+        <span class="settings-chevron">›</span>
+      </div>
+    </div>
+    <div class="insight" style="margin:20px 16px 0;text-align:center;background:none;border:none;color:var(--text-3);font-size:12px;">
+      GlucoScan v2 &mdash; Data stays on your device
+    </div>
+  </div>
+</div>
+
+<!-- ════ DEV OPTIONS ════ -->
+<div id="devScreen" class="screen">
+  <div class="history-header">
+    <h2>Developer Options</h2>
+    <button class="close-btn" id="closeDevBtn" style="width:36px;height:36px;">✕</button>
+  </div>
+  <div class="scroll">
+    <div id="devLocked" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:16px;">
+      <div style="font-size:40px;">🔒</div>
+      <div style="font-size:18px;font-weight:600;">Developer Options Locked</div>
+      <div style="font-size:13px;color:var(--text-3);text-align:center;max-width:280px;line-height:1.5;">Enter the 4-digit developer code to access testing tools.</div>
+      <input type="password" class="pill-input" id="devCodeInput" maxlength="4" inputmode="numeric" placeholder="• • • •">
+      <button id="devUnlockBtn" style="padding:10px 32px;border-radius:10px;background:var(--accent);color:white;font-size:14px;font-weight:600;">Unlock</button>
+      <div id="devCodeError" style="font-size:12px;color:var(--low);display:none;">Incorrect code</div>
+    </div>
+    <div id="devUnlocked" style="display:none;">
+      <div class="card" style="padding:0;">
+        <div class="settings-item">
+          <div>
+            <div class="settings-label">Load Demo Data</div>
+            <div class="settings-desc">Generate 90 days of realistic sample readings to preview the app</div>
+          </div>
+          <button id="loadDemoBtn" style="padding:6px 14px;border-radius:8px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:600;border:1px solid rgba(14,165,233,0.3);">Load</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px;padding:0;">
+        <div class="settings-item">
+          <div>
+            <div class="settings-label">Clear Demo Data</div>
+            <div class="settings-desc">Remove all demo records and start fresh</div>
+          </div>
+          <button id="clearDemoBtn" style="padding:6px 14px;border-radius:8px;background:rgba(239,68,68,0.1);color:var(--low);font-size:12px;font-weight:600;border:1px solid rgba(239,68,68,0.2);">Clear</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -477,8 +553,6 @@
 <!-- ════ TOAST ════ -->
 <div class="toast" id="toast"></div>
 
-<!-- ════ FAB ════ -->
-<button id="fabScan">📷</button>
 
 <script>
 const STORAGE_KEY = 'glucoscan_readings';
@@ -818,10 +892,20 @@ function bindUI() {
     });
   });
 
-  // FAB scan button
-  document.getElementById('fabScan').addEventListener('click', () => {
-    switchTab('scan');
+  // Settings
+  document.getElementById('settingsBtn').addEventListener('click', () => switchTab('settings'));
+  document.getElementById('closeSettingsBtn').addEventListener('click', () => switchTab('home'));
+  document.getElementById('settingsResetBtn').addEventListener('click', openReset);
+  document.getElementById('devOptionsEntry').addEventListener('click', () => switchTab('dev'));
+
+  // Dev options
+  document.getElementById('closeDevBtn').addEventListener('click', () => switchTab('settings'));
+  document.getElementById('devUnlockBtn').addEventListener('click', tryDevUnlock);
+  document.getElementById('devCodeInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryDevUnlock();
   });
+  document.getElementById('loadDemoBtn').addEventListener('click', loadDemoData);
+  document.getElementById('clearDemoBtn').addEventListener('click', clearDemoData);
 
   // Scan screen
   document.getElementById('closeScanBtn').addEventListener('click', () => switchTab('home'));
@@ -1147,6 +1231,102 @@ function confirmReset() {
   showToast('All data cleared');
 }
 
+// ── DEVELOPER OPTIONS ──
+const DEV_CODE = '7391';
+
+function tryDevUnlock() {
+  const input = document.getElementById('devCodeInput');
+  const error = document.getElementById('devCodeError');
+  if (input.value === DEV_CODE) {
+    error.style.display = 'none';
+    document.getElementById('devLocked').style.display = 'none';
+    document.getElementById('devUnlocked').style.display = 'block';
+    showToast('Developer options unlocked');
+  } else {
+    error.style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function loadDemoData() {
+  const now = new Date();
+  const DAY = 86400000;
+  const demo = [];
+
+  for (let d = 89; d >= 0; d--) {
+    const dayStart = new Date(now.getTime() - d * DAY);
+    const hrs = dayStart.getHours();
+
+    // Morning fasting (7am) — stable 85-105
+    const morning = new Date(dayStart);
+    morning.setHours(7, 0, 0, 0);
+    demo.push({
+      id: 'demo-' + morning.getTime(),
+      value: 85 + Math.floor(Math.random() * 20),
+      tag: 'Fasting',
+      timestamp: morning.toISOString(),
+      source: 'demo'
+    });
+
+    // Post-meal spikes around lunch (12:30pm) and dinner (7pm)
+    const lunch = new Date(dayStart);
+    lunch.setHours(12, 30, 0, 0);
+    if (d % 3 !== 0) {
+      const spike = d % 7 === 0 ? 160 + Math.floor(Math.random() * 30) : 0;
+      demo.push({
+        id: 'demo-' + lunch.getTime(),
+        value: 110 + Math.floor(Math.random() * 30) + spike,
+        tag: 'After meal',
+        timestamp: lunch.toISOString(),
+        source: 'demo'
+      });
+    }
+
+    const dinner = new Date(dayStart);
+    dinner.setHours(19, 0, 0, 0);
+    demo.push({
+      id: 'demo-' + dinner.getTime(),
+      value: 115 + Math.floor(Math.random() * 40),
+      tag: 'After meal',
+      timestamp: dinner.toISOString(),
+      source: 'demo'
+    });
+
+    // Bedtime (10:30pm) every other day
+    if (d % 2 === 0) {
+      const bed = new Date(dayStart);
+      bed.setHours(22, 30, 0, 0);
+      demo.push({
+        id: 'demo-' + bed.getTime(),
+        value: 100 + Math.floor(Math.random() * 30),
+        tag: 'Bedtime',
+        timestamp: bed.toISOString(),
+        source: 'demo'
+      });
+    }
+  }
+
+  readings = demo.concat(readings.filter(r => r.source !== 'demo'));
+  readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  saveReadings();
+  renderAll();
+  showToast('Demo data loaded (90 days)');
+}
+
+function clearDemoData() {
+  const before = readings.length;
+  readings = readings.filter(r => r.source !== 'demo');
+  if (readings.length === before) {
+    showToast('No demo data to clear');
+    return;
+  }
+  readings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  saveReadings();
+  renderAll();
+  showToast('Demo data cleared');
+}
+
 // ── TOAST ──
 let toastTimer = null;
 function showToast(msg) {
@@ -1194,6 +1374,10 @@ document.addEventListener('DOMContentLoaded', () => {
     <button class="tab-btn" data-tab="scan">
       <span class="tab-icon">📷</span>
       Scan
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <span class="tab-icon">⚙️</span>
+      Settings
     </button>
   `;
   document.body.appendChild(tabBar);
