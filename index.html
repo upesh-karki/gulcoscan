@@ -1780,11 +1780,11 @@ function initTheme() {
   }, 60000);
 }
 
-// ── CACHE BUST: force re-download if HTML changed ──
-// If user's browser is serving an old cached version, this tiny
-// version check won't change, but the user can hard-refresh.
-// The real fix: GitHub Pages and most hosts add ?v=N cache busters.
-// For now: bump APP_VERSION above to trigger migration + re-read.
+// ── SERVICE WORKER REGISTRATION ──
+// Caches the app shell so the PWA works reliably from home screen
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
 
 // ── BOOT ──
 document.addEventListener('DOMContentLoaded', () => {
